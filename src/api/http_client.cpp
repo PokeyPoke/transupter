@@ -44,6 +44,7 @@ HttpResponse HttpClient::postJson(const char* host, const char* path,
                                   const char* extraHeaderVal) {
     WiFiClientSecure client;
     client.setInsecure();
+    client.setBufferSizes(1024, 1024);
 
     HTTPClient http;
     http.begin(client, String("https://") + host + path);
@@ -62,6 +63,7 @@ HttpResponse HttpClient::postJsonAnthropic(const char* host, const char* path,
                                            const String& jsonBody) {
     WiFiClientSecure client;
     client.setInsecure();
+    client.setBufferSizes(1024, 1024);
 
     HTTPClient http;
     http.begin(client, String("https://") + host + path);
@@ -81,6 +83,7 @@ HttpResponse HttpClient::postMultipart(const char* host, const char* path,
                                        const char* model, const char* language) {
     WiFiClientSecure client;
     client.setInsecure();
+    client.setBufferSizes(1024, 1024); // reduce default 16KB TLS buffers → saves ~30KB heap
 
     // Explicit 15-second connection timeout (milliseconds for 3-arg connect)
     if (!client.connect(host, 443, 15000)) return { -1, "connect timeout" };
@@ -149,9 +152,10 @@ HttpResponse HttpClient::postJsonBinary(const char* host, const char* path,
                                         size_t& outLen) {
     WiFiClientSecure client;
     client.setInsecure();
+    client.setBufferSizes(1024, 1024);
     client.setTimeout(30);
 
-    if (!client.connect(host, 443)) return { -1, "connect failed" };
+    if (!client.connect(host, 443, 15000)) return { -1, "connect failed" };
 
     client.printf("POST %s HTTP/1.1\r\n", path);
     client.printf("Host: %s\r\n", host);
