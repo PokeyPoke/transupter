@@ -137,7 +137,7 @@ void TranslatorMode::drawIdle() {
     tft.print("E=Universal (any->EN)");
     tft.setTextColor(DARKGREY, BLACK);
     tft.setCursor(4, Display::CONTENT_Y + 80);
-    tft.print("Fn=Utilities");
+    tft.print("Fn/Opt=Utilities");
 }
 
 void TranslatorMode::drawRecording(char key) {

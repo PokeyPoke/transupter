@@ -7,15 +7,27 @@
 UtilitiesMode::UtilitiesMode(Display& disp, Keyboard& kb, Battery& bat, History& hist)
     : _disp(disp), _kb(kb), _bat(bat), _hist(hist) {}
 
+bool UtilitiesMode::wifiSetupRequested() {
+    if (_wifiSetupReq) { _wifiSetupReq = false; return true; }
+    return false;
+}
+
 void UtilitiesMode::tick(AppState& state) {
     auto ks = _kb.poll();
+
     if (_view == View::HistoryLog) {
         auto& entries = _hist.entries();
         if (ks.isUp   && _histScroll < (int)entries.size() - 1) _histScroll++;
         if (ks.isDown && _histScroll > 0) _histScroll--;
+        if (ks.isEsc) { _view = View::Clock; drawCurrentView(state); return; }
+    } else if (_view == View::WiFiSetup) {
+        if (ks.isEnter) { _wifiSetupReq = true; return; }
+        if (ks.isEsc)   { _view = View::Clock; }
+        if (ks.isUp)    _view = (View)(((int)_view - 1 + 5) % 5);
+        if (ks.isDown)  _view = (View)(((int)_view + 1) % 5);
     } else {
-        if (ks.isUp)   _view = (View)(((int)_view - 1 + 4) % 4);
-        if (ks.isDown) _view = (View)(((int)_view + 1) % 4);
+        if (ks.isUp)   _view = (View)(((int)_view - 1 + 5) % 5);
+        if (ks.isDown) _view = (View)(((int)_view + 1) % 5);
     }
     drawCurrentView(state);
 }
@@ -81,9 +93,27 @@ void UtilitiesMode::drawCurrentView(const AppState& state) {
         }
         break;
     }
+    case View::WiFiSetup: {
+        tft.setTextColor(CYAN, BLACK);
+        tft.setCursor(4, Display::CONTENT_Y + 8);
+        tft.print("WiFi Setup");
+        tft.setTextColor(WHITE, BLACK);
+        tft.setCursor(4, Display::CONTENT_Y + 24);
+        tft.printf("Status: %s", state.wifiConnected ? "Connected" : "Disconnected");
+        if (state.wifiConnected) {
+            tft.setCursor(4, Display::CONTENT_Y + 38);
+            tft.printf("IP: %s", WiFi.localIP().toString().c_str());
+            tft.setCursor(4, Display::CONTENT_Y + 52);
+            tft.printf("SSID: %s", WiFi.SSID().c_str());
+        }
+        tft.setTextColor(YELLOW, BLACK);
+        tft.setCursor(4, Display::CONTENT_Y + 72);
+        tft.print("Enter = scan & reconnect");
+        break;
+    }
     }
 
     tft.setTextColor(DARKGREY, BLACK);
     tft.setCursor(4, Display::CONTENT_Y + 96);
-    tft.print("Fn+W/S=switch view");
+    tft.print(";/. = switch view  Fn=back");
 }

@@ -217,7 +217,12 @@ void loop() {
 
     case AppMode::Utilities:
         utilities->tick(state);
-        {
+        if (utilities->wifiSetupRequested()) {
+            delete wifiSetup;
+            wifiSetup  = new WifiSetupMode(disp, kb, wifiMgr, nvs);
+            state.mode = AppMode::WifiSetup;
+            disp.clearContent();
+        } else {
             auto ks = kb.poll();
             if (ks.isEsc) {
                 state.mode = AppMode::Translator;

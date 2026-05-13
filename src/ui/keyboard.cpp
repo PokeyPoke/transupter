@@ -18,17 +18,20 @@ KeyState Keyboard::poll() {
 
     ks.isEnter = raw.enter;
     ks.isDel   = raw.del;
-    ks.isEsc   = raw.fn; // treat Fn as ESC/cancel
+    ks.isEsc   = raw.fn || raw.opt; // Fn or Opt = cancel/back
 
-    // Primary character key
+    // Primary character key (suppress nav keys from ch)
     if (!raw.word.empty()) {
-        ks.ch = tolower(raw.word[0]);
+        char c = raw.word[0];
+        if (c != ';' && c != '.') {
+            ks.ch = tolower(c);
+        }
     }
 
-    // Fn+W/S as up/down for menu navigation
-    if (raw.fn && !raw.word.empty()) {
-        if (raw.word[0] == 'w' || raw.word[0] == 'W') ks.isUp   = true;
-        if (raw.word[0] == 's' || raw.word[0] == 'S') ks.isDown = true;
+    // ; = up, . = down — right-side vertical pair, natural arrow substitute
+    if (!raw.word.empty()) {
+        if (raw.word[0] == ';') ks.isUp   = true;
+        if (raw.word[0] == '.') ks.isDown = true;
     }
 
     return ks;
