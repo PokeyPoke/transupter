@@ -1,3 +1,67 @@
+# AP Web Portal for API Key Entry — Implementation Plan
+
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+
+**Goal:** Replace the Cardputer keyboard-based API key entry with a WiFi Access Point + mobile-friendly web form that the user fills in from any phone or browser.
+
+**Architecture:** `ApiKeySetupMode` is fully rewritten (same public interface — `tick()` returns bool). On construction it starts a soft-AP named "Transupter-Setup" and an Arduino WebServer on port 80. Each `tick()` call drives `_server.handleClient()`. A POST handler validates the three key fields, writes them to NVS, updates AppState, and sets `_saved=true`. When `_saved` is true, the server and AP are torn down and `tick()` returns `true`. `main.cpp` is untouched.
+
+**Tech Stack:** ESP32 Arduino WebServer (built-in, no extra lib_deps), WiFi softAP, NVS via existing NvsStore wrapper.
+
+---
+
+## File Map
+
+| File | Change |
+|------|--------|
+| `src/modes/api_key_setup.h` | Full rewrite — AP + WebServer interface |
+| `src/modes/api_key_setup.cpp` | Full rewrite — AP setup, HTML served from PROGMEM, POST handler, NVS save |
+
+No other files change. `main.cpp` constructor call and tick() usage are identical.
+
+---
+
+## Task 1: Rewrite API Key Setup Mode
+
+**Files:**
+- Modify: `src/modes/api_key_setup.h` (full rewrite)
+- Modify: `src/modes/api_key_setup.cpp` (full rewrite)
+
+- [ ] **Step 1: Write `src/modes/api_key_setup.h`**
+
+```cpp
+#pragma once
+#include "../app.h"
+#include "../ui/display.h"
+#include "../ui/keyboard.h"
+#include "../system/nvs_store.h"
+#include <WebServer.h>
+
+class ApiKeySetupMode {
+public:
+    ApiKeySetupMode(Display& disp, Keyboard& kb, NvsStore& nvs);
+
+    // Returns true when all 3 keys have been saved via the web portal
+    bool tick(AppState& state);
+
+private:
+    void handleRoot();
+    void handleSave();
+    void handleDone();
+    void drawPortalScreen();
+
+    Display&   _disp;
+    Keyboard&  _kb;
+    NvsStore&  _nvs;
+    WebServer  _server{80};
+    AppState*  _state = nullptr;
+    bool       _saved = false;
+};
+```
+
+- [ ] **Step 2: Write `src/modes/api_key_setup.cpp`**
+
+```cpp
 #include "api_key_setup.h"
 #include "../config.h"
 #include <WiFi.h>
@@ -5,7 +69,7 @@
 
 // ── HTML pages stored in flash ─────────────────────────────────────────────
 
-static const char PORTAL_HTML[] = R"HTML(<!DOCTYPE html>
+static const char PORTAL_HTML[] PROGMEM = R"(<!DOCTYPE html>
 <html><head>
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Transupter Setup</title>
@@ -50,9 +114,9 @@ function t(id,btn){var i=document.getElementById(id);
   i.type=i.type==='password'?'text':'password';
   btn.textContent=i.type==='password'?'Show':'Hide';}
 </script>
-</body></html>)HTML";
+</body></html>)";
 
-static const char DONE_HTML[] = R"HTML(<!DOCTYPE html>
+static const char DONE_HTML[] PROGMEM = R"(<!DOCTYPE html>
 <html><head>
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Transupter</title>
@@ -64,9 +128,9 @@ h1{color:#00ff88}p{color:#aaa;line-height:1.6}
 <body>
 <h1>&#10003; Keys Saved</h1>
 <p>Your API keys have been saved to the device.<br>You can close this tab.</p>
-</body></html>)HTML";
+</body></html>)";
 
-static const char ERROR_HTML[] = R"HTML(<!DOCTYPE html>
+static const char ERROR_HTML[] PROGMEM = R"(<!DOCTYPE html>
 <html><head>
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Transupter</title>
@@ -78,7 +142,7 @@ h1{color:#ff4444}a{color:#00d4ff}
 <body>
 <h1>&#10007; All fields required</h1>
 <p><a href="/">&#8592; Go back and fill in all three keys</a></p>
-</body></html>)HTML";
+</body></html>)";
 
 // ── Constructor ─────────────────────────────────────────────────────────────
 
@@ -88,9 +152,9 @@ ApiKeySetupMode::ApiKeySetupMode(Display& disp, Keyboard& kb, NvsStore& nvs)
     WiFi.mode(WIFI_AP_STA);  // keep station mode if already connected
     WiFi.softAP("Transupter-Setup");
 
-    _server.on("/",     HTTP_GET,  [this]() { handleRoot(); });
-    _server.on("/save", HTTP_POST, [this]() { handleSave(); });
-    _server.on("/done", HTTP_GET,  [this]() { handleDone(); });
+    _server.on("/",      HTTP_GET,  [this]() { handleRoot(); });
+    _server.on("/save",  HTTP_POST, [this]() { handleSave(); });
+    _server.on("/done",  HTTP_GET,  [this]() { handleDone(); });
     _server.begin();
 
     drawPortalScreen();
@@ -114,23 +178,23 @@ bool ApiKeySetupMode::tick(AppState& state) {
 // ── Route handlers ──────────────────────────────────────────────────────────
 
 void ApiKeySetupMode::handleRoot() {
-    _server.send(200, "text/html", PORTAL_HTML);
+    _server.send_P(200, "text/html", PORTAL_HTML);
 }
 
 void ApiKeySetupMode::handleSave() {
-    String groq      = _server.arg("groq");
-    String anthropic = _server.arg("anthropic");
-    String openai    = _server.arg("openai");
+    String groq       = _server.arg("groq");
+    String anthropic  = _server.arg("anthropic");
+    String openai     = _server.arg("openai");
 
     if (groq.isEmpty() || anthropic.isEmpty() || openai.isEmpty()) {
-        _server.send(400, "text/html", ERROR_HTML);
+        _server.send_P(400, "text/html", ERROR_HTML);
         return;
     }
 
     _nvs.begin();
-    _nvs.putString(NVS_KEY_GROQ,      groq);
-    _nvs.putString(NVS_KEY_ANTHROPIC, anthropic);
-    _nvs.putString(NVS_KEY_OPENAI,    openai);
+    _nvs.putString(NVS_KEY_GROQ,       groq);
+    _nvs.putString(NVS_KEY_ANTHROPIC,  anthropic);
+    _nvs.putString(NVS_KEY_OPENAI,     openai);
     _nvs.end();
 
     if (_state) {
@@ -146,7 +210,7 @@ void ApiKeySetupMode::handleSave() {
 }
 
 void ApiKeySetupMode::handleDone() {
-    _server.send(200, "text/html", DONE_HTML);
+    _server.send_P(200, "text/html", DONE_HTML);
 }
 
 // ── Screen ──────────────────────────────────────────────────────────────────
@@ -174,3 +238,41 @@ void ApiKeySetupMode::drawPortalScreen() {
     tft.setCursor(4, Display::CONTENT_Y + 80);
     tft.print("Waiting for keys...");
 }
+```
+
+- [ ] **Step 3: Verify compile**
+
+```bash
+cd /Users/llama/Documents/projects/cardputer/transupter && pio run -e m5cardputer
+```
+
+Expected: SUCCESS. If WebServer.h is not found, add `WebServer` to lib_deps — but it is built into the ESP32 Arduino core and should resolve automatically.
+
+- [ ] **Step 4: Commit**
+
+```bash
+git add src/modes/api_key_setup.h src/modes/api_key_setup.cpp
+git commit -m "feat: replace keyboard API key entry with AP web portal"
+```
+
+- [ ] **Step 5: Flash**
+
+```bash
+pio run -e m5cardputer --target upload --upload-port /dev/cu.usbmodem1101
+```
+
+Expected: SUCCESS with upload confirmation.
+
+---
+
+## Verification
+
+After flashing, with no API keys stored in NVS:
+
+1. Screen shows **"Connect to WiFi: > Transupter-Setup"** and **"Open: > 192.168.4.1"**
+2. Connect phone or laptop to WiFi network **Transupter-Setup** (no password)
+3. Open **192.168.4.1** in browser — form appears with three password fields
+4. Try submitting with one field empty — error page shown, back link works
+5. Fill all three fields, submit — browser shows **"Keys Saved ✓"**
+6. Cardputer transitions to **Translator mode**
+7. Reboot — no setup screen shown (keys loaded from NVS)
