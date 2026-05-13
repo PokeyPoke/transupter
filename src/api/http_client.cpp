@@ -90,21 +90,15 @@ HttpResponse HttpClient::postMultipart(const char* host, const char* path,
                                        const String& bearerToken,
                                        const uint8_t* audioData, size_t audioLen,
                                        const char* model, const char* language) {
-    // Override DNS to 8.8.8.8 — bypasses router content filtering / DNS hijacking
+    // Override DNS to 8.8.8.8 — bypasses router DNS hijacking/content filtering.
+    // Connect by HOSTNAME so TLS stack sends correct SNI in handshake.
     useDNS(8, 8, 8, 8);
-
-    // DNS pre-check — fail fast with clear error if DNS can't resolve
-    IPAddress resolved;
-    if (!WiFi.hostByName(host, resolved)) {
-        return { -1, String("DNS failed: ") + host };
-    }
 
     WiFiClientSecure client;
     client.setInsecure();
 
-    // Connect by resolved IP to avoid DNS inside TLS stack
-    if (!client.connect(resolved, 443, 15000)) {
-        return { -1, String("TCP failed: ") + resolved.toString() };
+    if (!client.connect(host, 443, 15000)) {
+        return { -1, "TLS connect failed" };
     }
 
     String part1 = String("--") + MULTIPART_BOUNDARY + "\r\n";
