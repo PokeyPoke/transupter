@@ -4,18 +4,22 @@
 
 static const char* MULTIPART_BOUNDARY = "----ESP32Boundary7MA4YWxk";
 
-// Read response body with a 10-second inactivity timeout.
-// Handles servers that use chunked encoding or keep connections alive.
+// Read response body in 128-byte blocks — reduces heap fragmentation vs byte-by-byte.
 static String readBody(WiFiClientSecure& client) {
     String body;
     body.reserve(512);
+    uint8_t tmp[128];
     unsigned long lastData = millis();
     while (millis() - lastData < 10000) {
-        while (client.available()) {
-            body += (char)client.read();
-            lastData = millis();
+        int avail = client.available();
+        if (avail > 0) {
+            int n = client.readBytes(tmp, min(avail, (int)sizeof(tmp)));
+            if (n > 0) {
+                body.concat((const char*)tmp, n);
+                lastData = millis();
+            }
         }
-        if (!client.connected()) break;
+        if (!client.connected() && !client.available()) break;
         delay(1);
     }
     return body;
@@ -27,11 +31,13 @@ static size_t readBodyBinary(WiFiClientSecure& client,
     size_t len = 0;
     unsigned long lastData = millis();
     while (millis() - lastData < 10000 && len < maxLen) {
-        while (client.available() && len < maxLen) {
-            buf[len++] = client.read();
-            lastData = millis();
+        int avail = client.available();
+        if (avail > 0) {
+            int n = client.readBytes(buf + len,
+                                     min(avail, (int)(maxLen - len)));
+            if (n > 0) { len += n; lastData = millis(); }
         }
-        if (!client.connected()) break;
+        if (!client.connected() && !client.available()) break;
         delay(1);
     }
     return len;

@@ -137,13 +137,15 @@ void TranslatorMode::runPipeline(AppState& state, char langKeyChar,
     drawStatus("Connecting to Groq...");
     auto stt = _groq.transcribe(state.keyGroq, wavData, wavLen, lk->whisperLang);
     if (!stt.success) { drawError(stt.error); return; }
-    drawStatus("Transcribing...", stt.text.substring(0, 28).c_str());
+    drawStatus("Got transcript", stt.text.substring(0, 28).c_str());
+    delay(300); // let TLS heap fragments consolidate before next connection
 
     // Translation
     drawStatus("Translating...", stt.text.substring(0, 28).c_str());
     String tgtLang = targetLanguage(stt.detectedLang, lk);
     auto tr = _anthropic.translate(state.keyAnthropic, stt.text, tgtLang);
     if (!tr.success) { drawError(tr.error); return; }
+    delay(300); // consolidate before TTS connection
 
     drawResult(stt.text, tr.text);
     _hist.append(stt.text, tr.text, String(langKeyChar));
