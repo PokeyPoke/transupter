@@ -81,7 +81,6 @@ HttpResponse HttpClient::postMultipart(const char* host, const char* path,
                                        const char* model, const char* language) {
     WiFiClientSecure client;
     client.setInsecure();
-    client.setBufferSizes(1024, 1024); // reduce default 16KB TLS buffers → saves ~30KB heap
 
     // Explicit 15-second connection timeout (milliseconds for 3-arg connect)
     if (!client.connect(host, 443, 15000)) return { -1, "connect timeout" };
