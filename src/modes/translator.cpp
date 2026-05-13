@@ -45,49 +45,65 @@ void TranslatorMode::handleIdle(AppState& state) {
 }
 
 void TranslatorMode::handleRecording(AppState& state) {
-    char langKey = 0;
-    bool held = _kb.isLangKeyHeld(langKey);
+    // Tight synchronous recording loop — matches the official M5Cardputer mic example.
+    // record() blocks per-chunk; M5Cardputer.update() lets us check the keyboard.
+    static constexpr size_t CHUNK      = 240;   // one I2S DMA buffer
+    static constexpr size_t MAX_SECS   = 10;
+    static constexpr size_t MAX_SAMPLES = Recorder::SAMPLE_RATE * MAX_SECS;
 
-    _rec.drainChunk();
-    drawRecording(_activeLangKey);
+    int16_t* buf = (int16_t*) ps_malloc(MAX_SAMPLES * sizeof(int16_t));
+    if (!buf) { drawError("Out of memory"); _step = Step::Idle; drawIdle(); return; }
 
-    if (!held) {
-        _rec.stopRecord();
-        auto result = _rec.getResult();
+    size_t captured = 0;
+    int    drawTick = 0;
+    char   langKey  = _activeLangKey;
 
-        if (!result.voiceDetected) {
-            if (result.samples) free(result.samples);
-            drawError("Nothing recorded - hold key longer");
-            delay(2000);
-            _step = Step::Idle;
-            drawIdle();
-            return;
+    while (captured < MAX_SAMPLES) {
+        M5Cardputer.update();
+
+        char k = 0;
+        if (!_kb.isLangKeyHeld(k)) break; // key released — stop recording
+
+        size_t toRead = min(CHUNK, MAX_SAMPLES - captured);
+        if (M5Cardputer.Mic.record(buf + captured, toRead, Recorder::SAMPLE_RATE)) {
+            captured += toRead;
         }
 
-        WavHeader header = buildWavHeader(Recorder::SAMPLE_RATE, result.numSamples);
-        size_t totalLen  = sizeof(WavHeader) + result.numSamples * sizeof(int16_t);
-        uint8_t* wav     = (uint8_t*) ps_malloc(totalLen);
-
-        if (!wav) {
-            free(result.samples);
-            drawError("Out of memory");
-            delay(1500);
-            _step = Step::Idle;
-            drawIdle();
-            return;
-        }
-
-        memcpy(wav, &header, sizeof(WavHeader));
-        memcpy(wav + sizeof(WavHeader), result.samples, result.numSamples * sizeof(int16_t));
-        free(result.samples);
-
-        runPipeline(state, _activeLangKey, wav, totalLen);
-        free(wav);
-
-        _step = Step::Idle;
-        delay(2000);
-        drawIdle();
+        if (++drawTick >= 8) { drawRecording(langKey); drawTick = 0; }
     }
+
+    if (captured == 0) {
+        free(buf);
+        drawError("Nothing recorded");
+        delay(1500);
+        _step = Step::Idle;
+        drawIdle();
+        return;
+    }
+
+    WavHeader header  = buildWavHeader(Recorder::SAMPLE_RATE, captured);
+    size_t    wavLen  = sizeof(WavHeader) + captured * sizeof(int16_t);
+    uint8_t*  wav     = (uint8_t*) ps_malloc(wavLen);
+
+    if (!wav) {
+        free(buf);
+        drawError("Out of memory");
+        delay(1500);
+        _step = Step::Idle;
+        drawIdle();
+        return;
+    }
+
+    memcpy(wav, &header, sizeof(WavHeader));
+    memcpy(wav + sizeof(WavHeader), buf, captured * sizeof(int16_t));
+    free(buf);
+
+    runPipeline(state, langKey, wav, wavLen);
+    free(wav);
+
+    _step = Step::Idle;
+    delay(2000);
+    drawIdle();
 }
 
 void TranslatorMode::runPipeline(AppState& state, char langKeyChar,

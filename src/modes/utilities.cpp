@@ -12,8 +12,17 @@ bool UtilitiesMode::wifiSetupRequested() {
     return false;
 }
 
+bool UtilitiesMode::backRequested() {
+    if (_backReq) { _backReq = false; return true; }
+    return false;
+}
+
 void UtilitiesMode::tick(AppState& state) {
     auto ks = _kb.poll();
+
+    // Detect Fn/Opt directly — isChange() may be consumed, so read state directly
+    auto& raw = M5Cardputer.Keyboard.keysState();
+    if (raw.fn || raw.opt) { _backReq = true; return; }
 
     if (_view == View::HistoryLog) {
         auto& entries = _hist.entries();

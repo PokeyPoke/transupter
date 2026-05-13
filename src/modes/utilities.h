@@ -10,8 +10,8 @@ public:
     UtilitiesMode(Display& disp, Keyboard& kb, Battery& bat, History& hist);
     void tick(AppState& state);
 
-    // Returns true once if the user requested WiFi setup from this mode
-    bool wifiSetupRequested();
+    bool wifiSetupRequested(); // true once when user navigates to WiFi view
+    bool backRequested();      // true once when user presses Fn/Opt to exit
 
 private:
     enum class View { Clock, BatteryStats, SystemInfo, HistoryLog, WiFiSetup };
@@ -24,5 +24,6 @@ private:
     View      _view            = View::Clock;
     int       _histScroll      = 0;
     bool      _wifiSetupReq    = false;
-    bool      _enterDown       = false; // rising-edge debounce for Enter
+    bool      _backReq         = false;
+    bool      _enterDown       = false;
 };
