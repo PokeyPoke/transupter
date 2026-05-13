@@ -44,9 +44,18 @@ void TranslatorMode::handleIdle(AppState& state) {
 }
 
 void TranslatorMode::handleRecording(AppState& state) {
-    // Fixed 5-second recording — press once to start, no holding required.
-    // This removes all keyboard-detection-during-recording complexity.
-    // A countdown on screen shows how long is left.
+    // ── Diagnostic: no allocation, no mic, just stay on screen for 5s ──────
+    _disp.clearContent();
+    M5Cardputer.Display.setTextSize(2);
+    M5Cardputer.Display.setTextColor(RED, BLACK);
+    M5Cardputer.Display.setCursor(4, Display::CONTENT_Y + 20);
+    M5Cardputer.Display.print("DIAG: 5s hold");
+    delay(5000);
+    _step = Step::Idle;
+    drawIdle();
+    return;
+    // ── end diagnostic ──────────────────────────────────────────────────────
+
     static constexpr size_t CHUNK      = 240;
     static constexpr size_t REC_SECS   = 5;
     static constexpr size_t MAX_SAMPLES = Recorder::SAMPLE_RATE * REC_SECS;
