@@ -1,17 +1,6 @@
 #include "http_client.h"
 #include "../config.h"
 #include <HTTPClient.h>
-#include <WiFi.h>
-#include <lwip/dns.h>
-#include <lwip/ip_addr.h>
-
-// Override DNS to 8.8.8.8 — bypasses router content filtering / DNS hijacking
-static void useDNS(uint8_t a, uint8_t b, uint8_t c, uint8_t d) {
-    ip_addr_t dns;
-    IP4_ADDR(&dns.u_addr.ip4, a, b, c, d);
-    dns.type = IPADDR_TYPE_V4;
-    dns_setserver(0, &dns);
-}
 
 static const char* MULTIPART_BOUNDARY = "----ESP32Boundary7MA4YWxk";
 
@@ -90,10 +79,6 @@ HttpResponse HttpClient::postMultipart(const char* host, const char* path,
                                        const String& bearerToken,
                                        const uint8_t* audioData, size_t audioLen,
                                        const char* model, const char* language) {
-    // Override DNS to 8.8.8.8 — bypasses router DNS hijacking/content filtering.
-    // Connect by HOSTNAME so TLS stack sends correct SNI in handshake.
-    useDNS(8, 8, 8, 8);
-
     WiFiClientSecure client;
     client.setInsecure();
 
@@ -143,8 +128,10 @@ HttpResponse HttpClient::postMultipart(const char* host, const char* path,
     client.print(part2);
     client.print(part3);
     client.print(ending);
+    client.flush(); // ensure all bytes are sent before reading response
 
-    // Read status line and skip headers
+    // Read status line and headers with inactivity timeout
+    client.setTimeout(15); // 15s per readStringUntil call
     String statusLine = client.readStringUntil('\n');
     int code = 0;
     sscanf(statusLine.c_str(), "HTTP/1.1 %d", &code);
