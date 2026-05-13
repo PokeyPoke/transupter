@@ -104,6 +104,12 @@ static void syncNtp() {
 void setup() {
     auto cfg = M5.config();
     M5Cardputer.begin(cfg, true);
+
+    // Mic and Speaker share I2S — stop speaker first, then start mic.
+    // M5Cardputer.begin() does not auto-start the mic.
+    M5Cardputer.Speaker.end();
+    M5Cardputer.Mic.begin();
+
     disp.begin();
 
     LittleFS.begin(true); // format on first boot if needed
