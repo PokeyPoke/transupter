@@ -21,7 +21,10 @@ void UtilitiesMode::tick(AppState& state) {
         if (ks.isDown && _histScroll > 0) _histScroll--;
         if (ks.isEsc) { _view = View::Clock; drawCurrentView(state); return; }
     } else if (_view == View::WiFiSetup) {
-        if (ks.isEnter) { _wifiSetupReq = true; return; }
+        bool enterNow = M5Cardputer.Keyboard.keysState().enter;
+        bool enterPressed = enterNow && !_enterDown;
+        _enterDown = enterNow;
+        if (enterPressed) { _wifiSetupReq = true; return; }
         if (ks.isEsc)   { _view = View::Clock; }
         if (ks.isUp)    _view = (View)(((int)_view - 1 + 5) % 5);
         if (ks.isDown)  _view = (View)(((int)_view + 1) % 5);

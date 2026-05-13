@@ -28,4 +28,5 @@ private:
     std::vector<AccessPoint> _aps;
     int                _selected  = 0;
     String             _password;
+    bool               _enterDown = false;
 };

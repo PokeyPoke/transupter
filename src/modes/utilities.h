@@ -24,4 +24,5 @@ private:
     View      _view            = View::Clock;
     int       _histScroll      = 0;
     bool      _wifiSetupReq    = false;
+    bool      _enterDown       = false; // rising-edge debounce for Enter
 };

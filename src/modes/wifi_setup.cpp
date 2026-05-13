@@ -20,7 +20,11 @@ bool WifiSetupMode::tick(AppState& state) {
         auto ks = _kb.poll();
         if (ks.isUp && _selected > 0) { _selected--; drawNetworkList(); }
         if (ks.isDown && _selected < (int)_aps.size()-1) { _selected++; drawNetworkList(); }
-        if (ks.isEnter && !_aps.empty()) {
+        // Rising-edge Enter detection: trigger once per press
+        bool enterNow = M5Cardputer.Keyboard.keysState().enter;
+        bool enterPressed = enterNow && !_enterDown;
+        _enterDown = enterNow;
+        if (enterPressed && !_aps.empty()) {
             _password = "";
             _step = Step::EnterPassword;
             drawPasswordEntry();
@@ -30,13 +34,16 @@ bool WifiSetupMode::tick(AppState& state) {
 
     case Step::EnterPassword: {
         auto ks = _kb.poll();
+        bool enterNow = M5Cardputer.Keyboard.keysState().enter;
+        bool enterPressed = enterNow && !_enterDown;
+        _enterDown = enterNow;
         if (ks.isDel && _password.length() > 0) {
             _password.remove(_password.length() - 1);
             drawPasswordEntry();
-        } else if (ks.ch && !ks.isEnter && !ks.isDel) {
+        } else if (ks.ch && !enterNow && !ks.isDel) {
             _password += ks.ch;
             drawPasswordEntry();
-        } else if (ks.isEnter) {
+        } else if (enterPressed) {
             _wifi.connect(_aps[_selected].ssid, _password);
             _step = Step::Connecting;
             drawConnecting();
