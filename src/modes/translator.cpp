@@ -128,9 +128,10 @@ void TranslatorMode::runPipeline(AppState& state, char langKeyChar,
     if (!lk) { drawError("Unknown key"); return; }
 
     // STT
-    drawStatus("Transcribing...");
+    drawStatus("Connecting to Groq...");
     auto stt = _groq.transcribe(state.keyGroq, wavData, wavLen, lk->whisperLang);
     if (!stt.success) { drawError(stt.error); return; }
+    drawStatus("Transcribing...", stt.text.substring(0, 28).c_str());
 
     // Translation
     drawStatus("Translating...", stt.text.substring(0, 28).c_str());

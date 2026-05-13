@@ -81,9 +81,9 @@ HttpResponse HttpClient::postMultipart(const char* host, const char* path,
                                        const char* model, const char* language) {
     WiFiClientSecure client;
     client.setInsecure();
-    client.setTimeout(30);
 
-    if (!client.connect(host, 443)) return { -1, "connect failed" };
+    // Explicit 15-second connection timeout (milliseconds for 3-arg connect)
+    if (!client.connect(host, 443, 15000)) return { -1, "connect timeout" };
 
     String part1 = String("--") + MULTIPART_BOUNDARY + "\r\n";
     part1 += "Content-Disposition: form-data; name=\"file\"; filename=\"audio.wav\"\r\n";
@@ -113,7 +113,17 @@ HttpResponse HttpClient::postMultipart(const char* host, const char* path,
     client.print("Connection: close\r\n\r\n");
 
     client.print(part1);
-    client.write(audioData, audioLen);
+
+    // Send audio in 1KB chunks — yields to WiFi stack between chunks
+    static constexpr size_t WRITE_CHUNK = 1024;
+    size_t written = 0;
+    while (written < audioLen) {
+        size_t n = min(WRITE_CHUNK, audioLen - written);
+        if (client.write(audioData + written, n) == 0) break;
+        written += n;
+        yield();
+    }
+
     client.print(part2);
     client.print(part3);
     client.print(ending);
