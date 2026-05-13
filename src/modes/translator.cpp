@@ -56,24 +56,28 @@ void TranslatorMode::handleRecording(AppState& state) {
 
     size_t        captured    = 0;
     char          langKey     = _activeLangKey;
-    unsigned long lastCheckMs = millis();
+    unsigned long lastDrawMs  = millis();
 
     drawRecording(langKey);
 
     while (captured < MAX_SAMPLES) {
-        // Record one DMA chunk (~15ms of audio)
+        // Keep keyboard scanner alive every chunk — debounce needs regular scans
+        M5Cardputer.Keyboard.updateKeyList();
+
+        // Stop if no key is physically pressed
+        if (!M5Cardputer.Keyboard.isPressed()) break;
+
+        // Record one DMA chunk
         size_t toRead = min(CHUNK, MAX_SAMPLES - captured);
         if (M5Cardputer.Mic.record(buf + captured, toRead, Recorder::SAMPLE_RATE)) {
             captured += toRead;
+        } else {
+            delay(5); // mic not ready — brief pause
         }
 
-        // Check key state every 100ms — don't scan keyboard on every chunk
-        // (over-scanning causes debounce to briefly show key as released)
-        if (millis() - lastCheckMs >= 100) {
-            lastCheckMs = millis();
-            M5Cardputer.update();
-            char k = 0;
-            if (!_kb.isLangKeyHeld(k)) break;
+        // Refresh display every 300ms
+        if (millis() - lastDrawMs >= 300) {
+            lastDrawMs = millis();
             drawRecording(langKey);
         }
     }
