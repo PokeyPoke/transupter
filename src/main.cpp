@@ -231,6 +231,7 @@ void loop() {
         if (utilities->backRequested()) {
             state.mode = AppMode::Translator;
             disp.clearContent();
+            if (translator) translator->forceRedraw();
         } else if (utilities->wifiSetupRequested()) {
             delete wifiSetup;
             wifiSetup  = new WifiSetupMode(disp, kb, wifiMgr, nvs);

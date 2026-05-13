@@ -29,6 +29,10 @@ void TranslatorMode::tick(AppState& state) {
     }
 }
 
+void TranslatorMode::forceRedraw() {
+    drawIdle();
+}
+
 void TranslatorMode::handleIdle(AppState& state) {
     char langKey = 0;
     bool held = _kb.isLangKeyHeld(langKey);

@@ -79,11 +79,19 @@ HttpResponse HttpClient::postMultipart(const char* host, const char* path,
                                        const String& bearerToken,
                                        const uint8_t* audioData, size_t audioLen,
                                        const char* model, const char* language) {
+    // DNS pre-check — fail fast with clear error if DNS can't resolve
+    IPAddress resolved;
+    if (!WiFi.hostByName(host, resolved)) {
+        return { -1, String("DNS failed: ") + host };
+    }
+
     WiFiClientSecure client;
     client.setInsecure();
 
-    // Explicit 15-second connection timeout (milliseconds for 3-arg connect)
-    if (!client.connect(host, 443, 15000)) return { -1, "connect timeout" };
+    // Connect by resolved IP to avoid DNS inside TLS stack
+    if (!client.connect(resolved, 443, 15000)) {
+        return { -1, String("TCP failed: ") + resolved.toString() };
+    }
 
     String part1 = String("--") + MULTIPART_BOUNDARY + "\r\n";
     part1 += "Content-Disposition: form-data; name=\"file\"; filename=\"audio.wav\"\r\n";

@@ -43,6 +43,9 @@ private:
     const LangKey* findLangKey(char ch) const;
     String targetLanguage(const String& detectedLang, const LangKey* lk) const;
 
+public:
+    void forceRedraw(); // called by main.cpp when switching to this mode
+
     Display&     _disp;
     Keyboard&    _kb;
     History&     _hist;
