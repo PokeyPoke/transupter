@@ -118,8 +118,7 @@ void TranslatorMode::handleRecording(AppState& state) {
     memcpy(wav + sizeof(WavHeader), buf, captured * sizeof(int16_t));
     free(buf);
 
-    runPipeline(state, langKey, wav, wavLen);
-    free(wav);
+    runPipeline(state, langKey, wav, wavLen); // takes ownership, frees wav after STT
 
     _step = Step::Idle;
     delay(2000);
@@ -127,36 +126,40 @@ void TranslatorMode::handleRecording(AppState& state) {
 }
 
 void TranslatorMode::runPipeline(AppState& state, char langKeyChar,
-                                 const uint8_t* wavData, size_t wavLen) {
+                                 uint8_t* wavData, size_t wavLen) {
     const LangKey* lk = findLangKey(langKeyChar);
-    if (!lk) { drawError("Unknown key"); return; }
+    if (!lk) { free(wavData); drawError("Unknown key"); return; }
 
-    if (!state.wifiConnected) { drawError("No WiFi - go to Utilities"); return; }
+    if (!state.wifiConnected) { free(wavData); drawError("No WiFi - go to Utilities"); return; }
 
-    // STT
+    // STT — transcribe audio
     drawStatus("Connecting to Groq...");
     auto stt = _groq.transcribe(state.keyGroq, wavData, wavLen, lk->whisperLang);
-    if (!stt.success) { drawError(stt.error); return; }
-    drawStatus("Got transcript", stt.text.substring(0, 28).c_str());
-    delay(300); // let TLS heap fragments consolidate before next connection
 
-    // Translation
+    // Free WAV buffer NOW — largest allocation (~64 KB), must go before Anthropic TLS
+    free(wavData);
+    wavData = nullptr;
+
+    if (!stt.success) { drawError(stt.error); return; }
+    drawStatus("Got:", stt.text.substring(0, 28).c_str());
+
+    // Translation — Anthropic TLS needs ~8 KB (reduced from 32 KB via sdkconfig)
     drawStatus("Translating...", stt.text.substring(0, 28).c_str());
     String tgtLang = targetLanguage(stt.detectedLang, lk);
     auto tr = _anthropic.translate(state.keyAnthropic, stt.text, tgtLang);
     if (!tr.success) { drawError(tr.error); return; }
-    delay(300); // consolidate before TTS connection
 
     drawResult(stt.text, tr.text);
     _hist.append(stt.text, tr.text, String(langKeyChar));
 
-    // TTS
+    // TTS — attempt but non-fatal if memory is tight
     drawStatus("Speaking...");
     auto tts = _tts.synthesize(state.keyOpenAI, tr.text);
-    if (!tts.success) { drawError(tts.error); return; }
-
-    _player.playWav(tts.data, tts.length);
-    free(tts.data);
+    if (tts.success) {
+        _player.playWav(tts.data, tts.length);
+        free(tts.data);
+    }
+    // If TTS fails, result is already on screen — not an error
 
     drawResult(stt.text, tr.text);
 }

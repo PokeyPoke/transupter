@@ -32,7 +32,7 @@ private:
     void handleIdle(AppState& state);
     void handleRecording(AppState& state);
     void runPipeline(AppState& state, char langKey,
-                     const uint8_t* wavData, size_t wavLen);
+                     uint8_t* wavData, size_t wavLen); // takes ownership, freed after STT
 
     void drawIdle();
     void drawRecording(char key);

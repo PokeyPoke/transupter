@@ -1,0 +1,5 @@
+# Reduce mbedTLS I/O fragment size from 16 KB to 4 KB
+# This cuts TLS buffer requirements from ~32 KB to ~8 KB per connection,
+# allowing sequential Groq + Anthropic connections to fit in 260 KB heap.
+CONFIG_MBEDTLS_SSL_IN_CONTENT_LEN=4096
+CONFIG_MBEDTLS_SSL_OUT_CONTENT_LEN=4096
