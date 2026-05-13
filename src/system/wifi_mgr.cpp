@@ -36,6 +36,11 @@ int WifiMgr::rssi() const {
 bool WifiMgr::isConnected() const { return _status == WifiStatus::Connected; }
 
 std::vector<AccessPoint> WifiMgr::scan() {
+    // Reset radio to clean STA state before scanning
+    WiFi.mode(WIFI_STA);
+    WiFi.disconnect(true);
+    delay(150);
+
     std::vector<AccessPoint> results;
     int n = WiFi.scanNetworks();
     for (int i = 0; i < n; i++) {

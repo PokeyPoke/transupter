@@ -11,8 +11,9 @@ bool WifiSetupMode::tick(AppState& state) {
     case Step::Scanning:
         _disp.clearContent();
         _disp.printContent("Scanning WiFi...");
-        _aps  = _wifi.scan();
-        _step = Step::SelectNetwork;
+        _aps      = _wifi.scan();
+        _selected = 0;
+        _step     = Step::SelectNetwork;
         drawNetworkList();
         break;
 
@@ -80,7 +81,18 @@ void WifiSetupMode::drawNetworkList() {
     tft.setTextSize(1);
     tft.setTextColor(CYAN, BLACK);
     tft.setCursor(4, Display::CONTENT_Y + 2);
-    tft.print(";/. scroll  Enter=select  Fn=skip WiFi");
+    tft.print(";/. scroll  Enter=select  Fn=skip");
+
+    if (_aps.empty()) {
+        tft.setTextColor(ORANGE, BLACK);
+        tft.setCursor(4, Display::CONTENT_Y + 20);
+        tft.print("No networks found.");
+        tft.setTextColor(DARKGREY, BLACK);
+        tft.setCursor(4, Display::CONTENT_Y + 36);
+        tft.print("Navigate away & back to retry.");
+        return;
+    }
+
     for (int i = 0; i < (int)_aps.size() && i < 5; i++) {
         tft.setCursor(4, Display::CONTENT_Y + 14 + i * 12);
         tft.setTextColor(i == _selected ? YELLOW : WHITE, BLACK);
