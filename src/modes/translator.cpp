@@ -44,16 +44,25 @@ void TranslatorMode::handleIdle(AppState& state) {
 }
 
 void TranslatorMode::handleRecording(AppState& state) {
-    // ── Diagnostic: no allocation, no mic, just stay on screen for 5s ──────
-    _disp.clearContent();
-    M5Cardputer.Display.setTextSize(2);
-    M5Cardputer.Display.setTextColor(RED, BLACK);
-    M5Cardputer.Display.setCursor(4, Display::CONTENT_Y + 20);
-    M5Cardputer.Display.print("DIAG: 5s hold");
-    delay(5000);
-    _step = Step::Idle;
-    drawIdle();
-    return;
+    // ── Diagnostic: test ps_malloc ──────────────────────────────────────────
+    {
+        static constexpr size_t TEST = 16000 * 5 * sizeof(int16_t); // 160KB
+        int16_t* tmp = (int16_t*) ps_malloc(TEST);
+        _disp.clearContent();
+        M5Cardputer.Display.setTextSize(1);
+        M5Cardputer.Display.setTextColor(WHITE, BLACK);
+        M5Cardputer.Display.setCursor(4, Display::CONTENT_Y + 10);
+        if (tmp) {
+            M5Cardputer.Display.printf("ps_malloc OK (%d KB)", (int)(TEST/1024));
+            free(tmp);
+        } else {
+            M5Cardputer.Display.print("ps_malloc FAILED");
+        }
+        delay(4000);
+        _step = Step::Idle;
+        drawIdle();
+        return;
+    }
     // ── end diagnostic ──────────────────────────────────────────────────────
 
     static constexpr size_t CHUNK      = 240;
