@@ -18,8 +18,9 @@ void Recorder::startRecord(int maxSecs) {
 void Recorder::drainChunk() {
     if (!_recording || !_buf || _captured >= _maxSamples) return;
     size_t toRead = min(DRAIN_CHUNK, _maxSamples - _captured);
-    M5.Mic.record(_buf + _captured, toRead, SAMPLE_RATE);
-    _captured += toRead;
+    if (M5.Mic.record(_buf + _captured, toRead, SAMPLE_RATE)) {
+        _captured += toRead;
+    }
 }
 
 void Recorder::stopRecord() {

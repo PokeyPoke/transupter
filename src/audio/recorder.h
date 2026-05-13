@@ -11,7 +11,7 @@ struct RecordResult {
 class Recorder {
 public:
     static constexpr int    SAMPLE_RATE    = 16000;
-    static constexpr int    VAD_THRESHOLD  = 500;  // peak amplitude below = silence
+    static constexpr int    VAD_THRESHOLD  = 50;   // peak amplitude below = silence
     static constexpr size_t DRAIN_CHUNK    = 512;  // samples per drain call
 
     // Allocates PSRAM buffer and starts mic.
