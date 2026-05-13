@@ -127,6 +127,8 @@ void TranslatorMode::runPipeline(AppState& state, char langKeyChar,
     const LangKey* lk = findLangKey(langKeyChar);
     if (!lk) { drawError("Unknown key"); return; }
 
+    if (!state.wifiConnected) { drawError("No WiFi - go to Utilities"); return; }
+
     // STT
     drawStatus("Connecting to Groq...");
     auto stt = _groq.transcribe(state.keyGroq, wavData, wavLen, lk->whisperLang);
