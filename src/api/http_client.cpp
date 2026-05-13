@@ -44,7 +44,6 @@ HttpResponse HttpClient::postJson(const char* host, const char* path,
                                   const char* extraHeaderVal) {
     WiFiClientSecure client;
     client.setInsecure();
-    client.setBufferSizes(1024, 1024);
 
     HTTPClient http;
     http.begin(client, String("https://") + host + path);
@@ -63,7 +62,6 @@ HttpResponse HttpClient::postJsonAnthropic(const char* host, const char* path,
                                            const String& jsonBody) {
     WiFiClientSecure client;
     client.setInsecure();
-    client.setBufferSizes(1024, 1024);
 
     HTTPClient http;
     http.begin(client, String("https://") + host + path);
@@ -152,7 +150,6 @@ HttpResponse HttpClient::postJsonBinary(const char* host, const char* path,
                                         size_t& outLen) {
     WiFiClientSecure client;
     client.setInsecure();
-    client.setBufferSizes(1024, 1024);
     client.setTimeout(30);
 
     if (!client.connect(host, 443, 15000)) return { -1, "connect failed" };

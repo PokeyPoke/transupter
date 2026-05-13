@@ -75,9 +75,6 @@ bool WifiSetupMode::tick(AppState& state) {
             _nvs.putString(NVS_WIFI_PASS, _password);
             _nvs.end();
             state.wifiConnected = true;
-            // Use Google DNS to avoid router DNS issues blocking API domains
-            WiFi.config(WiFi.localIP(), WiFi.gatewayIP(), WiFi.subnetMask(),
-                        IPAddress(8, 8, 8, 8), IPAddress(8, 8, 4, 4));
             return true;
         }
         if (_wifi.status() == WifiStatus::Failed) {

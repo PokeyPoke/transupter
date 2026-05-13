@@ -86,11 +86,7 @@ static void bootWifi() {
     }
 
     state.wifiConnected = wifiMgr.isConnected();
-    if (state.wifiConnected) {
-        // Set Google DNS — avoids router DNS issues that block API domains
-        WiFi.config(WiFi.localIP(), WiFi.gatewayIP(), WiFi.subnetMask(),
-                    IPAddress(8, 8, 8, 8), IPAddress(8, 8, 4, 4));
-    } else if (!skipped) {
+    if (!state.wifiConnected && !skipped) {
         disp.showPopup("WiFi failed", "Continuing offline");
         delay(1500);
     }
