@@ -4,6 +4,13 @@
 
 static std::unordered_map<std::string, std::string> fakeNvs;
 
+void setUp(void) {
+    fakeNvs.clear();
+}
+
+void tearDown(void) {
+}
+
 std::string nvsGet(const std::string& key, const std::string& def) {
     auto it = fakeNvs.find(key);
     return it != fakeNvs.end() ? it->second : def;
