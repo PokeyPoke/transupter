@@ -32,15 +32,10 @@ void Recorder::stopRecord() {
 bool Recorder::isRecording() const { return _recording; }
 
 RecordResult Recorder::getResult() {
-    int32_t peak = 0;
-    for (size_t i = 0; i < _captured; i++) {
-        int32_t v = abs(_buf[i]);
-        if (v > peak) peak = v;
-    }
-
+    // VAD: pass if we captured anything — Groq handles empty audio gracefully
     return {
         .samples       = _buf,
         .numSamples    = _captured,
-        .voiceDetected = (peak >= VAD_THRESHOLD),
+        .voiceDetected = (_captured > 0),
     };
 }

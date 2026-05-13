@@ -57,8 +57,8 @@ void TranslatorMode::handleRecording(AppState& state) {
 
         if (!result.voiceDetected) {
             if (result.samples) free(result.samples);
-            drawError("No voice detected");
-            delay(1500);
+            drawError("Nothing recorded - hold key longer");
+            delay(2000);
             _step = Step::Idle;
             drawIdle();
             return;
