@@ -44,20 +44,18 @@ void TranslatorMode::handleIdle(AppState& state) {
 }
 
 void TranslatorMode::handleRecording(AppState& state) {
-    // ── Diagnostic: test ps_malloc ──────────────────────────────────────────
+    // ── Diagnostic: show PSRAM info, fall back to DRAM ─────────────────────
     {
-        static constexpr size_t TEST = 16000 * 5 * sizeof(int16_t); // 160KB
-        int16_t* tmp = (int16_t*) ps_malloc(TEST);
         _disp.clearContent();
-        M5Cardputer.Display.setTextSize(1);
-        M5Cardputer.Display.setTextColor(WHITE, BLACK);
-        M5Cardputer.Display.setCursor(4, Display::CONTENT_Y + 10);
-        if (tmp) {
-            M5Cardputer.Display.printf("ps_malloc OK (%d KB)", (int)(TEST/1024));
-            free(tmp);
-        } else {
-            M5Cardputer.Display.print("ps_malloc FAILED");
-        }
+        auto& tft = M5Cardputer.Display;
+        tft.setTextSize(1);
+        tft.setTextColor(WHITE, BLACK);
+        tft.setCursor(4, Display::CONTENT_Y + 4);
+        tft.printf("PSRAM size: %d KB", (int)(ESP.getPsramSize()/1024));
+        tft.setCursor(4, Display::CONTENT_Y + 18);
+        tft.printf("PSRAM free: %d KB", (int)(ESP.getFreePsram()/1024));
+        tft.setCursor(4, Display::CONTENT_Y + 32);
+        tft.printf("Heap free:  %d KB", (int)(ESP.getFreeHeap()/1024));
         delay(4000);
         _step = Step::Idle;
         drawIdle();

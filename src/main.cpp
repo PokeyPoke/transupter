@@ -102,6 +102,11 @@ static void syncNtp() {
 
 // ──────────────────────────────────────────────────────────────────────
 void setup() {
+    // Explicitly initialise PSRAM before anything else
+    if (!psramInit()) {
+        // PSRAM init failed — device will fall back to DRAM for audio buffers
+    }
+
     auto cfg = M5.config();
     M5Cardputer.begin(cfg, true);
 
