@@ -4,15 +4,18 @@
 #include <WiFi.h>
 #include <time.h>
 
-UtilitiesMode::UtilitiesMode(Display& disp, Keyboard& kb, Battery& bat)
-    : _disp(disp), _kb(kb), _bat(bat) {}
+UtilitiesMode::UtilitiesMode(Display& disp, Keyboard& kb, Battery& bat, History& hist)
+    : _disp(disp), _kb(kb), _bat(bat), _hist(hist) {}
 
 void UtilitiesMode::tick(AppState& state) {
     auto ks = _kb.poll();
-    if (ks.isUp) {
-        _view = (View)(((int)_view - 1 + 3) % 3);
-    } else if (ks.isDown) {
-        _view = (View)(((int)_view + 1) % 3);
+    if (_view == View::HistoryLog) {
+        auto& entries = _hist.entries();
+        if (ks.isUp   && _histScroll < (int)entries.size() - 1) _histScroll++;
+        if (ks.isDown && _histScroll > 0) _histScroll--;
+    } else {
+        if (ks.isUp)   _view = (View)(((int)_view - 1 + 4) % 4);
+        if (ks.isDown) _view = (View)(((int)_view + 1) % 4);
     }
     drawCurrentView(state);
 }
@@ -55,9 +58,31 @@ void UtilitiesMode::drawCurrentView(const AppState& state) {
         tft.printf("PSRAM free: %u KB", ESP.getFreePsram() / 1024);
         break;
     }
+    case View::HistoryLog: {
+        auto& entries = _hist.entries();
+        tft.setTextColor(CYAN, BLACK);
+        tft.setCursor(4, Display::CONTENT_Y + 2);
+        tft.printf("History (%d entries):", (int)entries.size());
+        int maxVisible = 4;
+        int start = max(0, (int)entries.size() - maxVisible - _histScroll);
+        for (int i = 0; i < maxVisible && start + i < (int)entries.size(); i++) {
+            auto& e = entries[start + i];
+            tft.setTextColor(DARKGREY, BLACK);
+            tft.setCursor(4, Display::CONTENT_Y + 14 + i * 24);
+            tft.print(e.source.substring(0, 34));
+            tft.setTextColor(WHITE, BLACK);
+            tft.setCursor(4, Display::CONTENT_Y + 24 + i * 24);
+            tft.print(e.translated.substring(0, 34));
+        }
+        if (entries.empty()) {
+            tft.setTextColor(DARKGREY, BLACK);
+            tft.setCursor(4, Display::CONTENT_Y + 30);
+            tft.print("No translations yet.");
+        }
+        break;
+    }
     }
 
-    // Nav hint
     tft.setTextColor(DARKGREY, BLACK);
     tft.setCursor(4, Display::CONTENT_Y + 96);
     tft.print("Fn+W/S=switch view");

@@ -130,7 +130,7 @@ void setup() {
         }
     }
 
-    utilities = new UtilitiesMode(disp, kb, battery);
+    utilities = new UtilitiesMode(disp, kb, battery, history);
     if (state.apiKeysSet) {
         translator = new TranslatorMode(disp, kb, history);
     }
