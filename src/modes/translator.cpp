@@ -44,30 +44,17 @@ void TranslatorMode::handleIdle(AppState& state) {
 }
 
 void TranslatorMode::handleRecording(AppState& state) {
-    // ── Diagnostic: show PSRAM info, fall back to DRAM ─────────────────────
-    {
-        _disp.clearContent();
-        auto& tft = M5Cardputer.Display;
-        tft.setTextSize(1);
-        tft.setTextColor(WHITE, BLACK);
-        tft.setCursor(4, Display::CONTENT_Y + 4);
-        tft.printf("PSRAM size: %d KB", (int)(ESP.getPsramSize()/1024));
-        tft.setCursor(4, Display::CONTENT_Y + 18);
-        tft.printf("PSRAM free: %d KB", (int)(ESP.getFreePsram()/1024));
-        tft.setCursor(4, Display::CONTENT_Y + 32);
-        tft.printf("Heap free:  %d KB", (int)(ESP.getFreeHeap()/1024));
-        delay(4000);
-        _step = Step::Idle;
-        drawIdle();
-        return;
-    }
-    // ── end diagnostic ──────────────────────────────────────────────────────
-
     static constexpr size_t CHUNK      = 240;
     static constexpr size_t REC_SECS   = 5;
     static constexpr size_t MAX_SAMPLES = Recorder::SAMPLE_RATE * REC_SECS;
 
-    int16_t* buf = (int16_t*) ps_malloc(MAX_SAMPLES * sizeof(int16_t));
+    // Prefer PSRAM; fall back to DRAM with shorter buffer if unavailable
+    size_t   maxSamples = MAX_SAMPLES;
+    int16_t* buf        = (int16_t*) ps_malloc(MAX_SAMPLES * sizeof(int16_t));
+    if (!buf) {
+        maxSamples = Recorder::SAMPLE_RATE * 2; // 2s from DRAM
+        buf        = (int16_t*) malloc(maxSamples * sizeof(int16_t));
+    }
     if (!buf) { drawError("Out of memory"); _step = Step::Idle; drawIdle(); return; }
 
     size_t        captured    = 0;
@@ -75,8 +62,8 @@ void TranslatorMode::handleRecording(AppState& state) {
     unsigned long startMs     = millis();
     unsigned long lastDrawMs  = 0;
 
-    while (captured < MAX_SAMPLES) {
-        size_t toRead = min(CHUNK, MAX_SAMPLES - captured);
+    while (captured < maxSamples) {
+        size_t toRead = min(CHUNK, maxSamples - captured);
         if (M5Cardputer.Mic.record(buf + captured, toRead, Recorder::SAMPLE_RATE)) {
             captured += toRead;
         } else {
@@ -112,6 +99,7 @@ void TranslatorMode::handleRecording(AppState& state) {
     WavHeader header  = buildWavHeader(Recorder::SAMPLE_RATE, captured);
     size_t    wavLen  = sizeof(WavHeader) + captured * sizeof(int16_t);
     uint8_t*  wav     = (uint8_t*) ps_malloc(wavLen);
+    if (!wav) wav     = (uint8_t*) malloc(wavLen);
 
     if (!wav) {
         free(buf);
