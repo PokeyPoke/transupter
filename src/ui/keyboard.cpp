@@ -18,7 +18,8 @@ KeyState Keyboard::poll() {
 
     ks.isEnter = raw.enter;
     ks.isDel   = raw.del;
-    ks.isEsc   = raw.fn || raw.opt; // Fn or Opt = cancel/back
+    ks.isEsc   = raw.fn;   // Fn = back/cancel
+    ks.isOpt   = raw.opt;  // Opt = alternate action
 
     // Primary character key (suppress nav keys from ch)
     if (!raw.word.empty()) {

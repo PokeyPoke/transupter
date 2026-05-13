@@ -8,9 +8,10 @@ struct KeyState {
     char     ch;          // lowercase character, or 0 for special keys
     bool     isEnter;
     bool     isDel;
-    bool     isEsc;       // mapped from Fn key
-    bool     isUp;        // Fn+W emulation
-    bool     isDown;      // Fn+S emulation
+    bool     isEsc;       // Fn key — back/cancel
+    bool     isOpt;       // Opt key — alternate action
+    bool     isUp;        // ; key
+    bool     isDown;      // . key
     KeyEvent event;
 };
 

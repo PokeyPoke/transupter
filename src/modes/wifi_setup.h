@@ -4,30 +4,41 @@
 #include "../ui/keyboard.h"
 #include "../system/wifi_mgr.h"
 #include "../system/nvs_store.h"
+#include <WebServer.h>
 
 class WifiSetupMode {
 public:
     WifiSetupMode(Display& disp, Keyboard& kb, WifiMgr& wifi, NvsStore& nvs);
 
-    // Returns true when WiFi is successfully connected (caller switches mode)
+    // Returns true when done (connected or skipped)
     bool tick(AppState& state);
 
 private:
-    enum class Step { Scanning, SelectNetwork, EnterPassword, Connecting };
+    enum class Step { Scanning, SelectNetwork, EnterPassword, Connecting,
+                      WebPortal, WebConnecting };
 
     void drawNetworkList();
     void drawPasswordEntry();
     void drawConnecting();
+    void startWebPortal();
+    void drawWebPortalScreen();
+    String buildPortalHtml() const;
 
     Display&  _disp;
     Keyboard& _kb;
     WifiMgr&  _wifi;
     NvsStore& _nvs;
 
-    Step               _step        = Step::Scanning;
+    Step               _step         = Step::Scanning;
     std::vector<AccessPoint> _aps;
-    int                _selected    = 0;
+    int                _selected     = 0;
     int                _scrollOffset = 0;
     String             _password;
-    bool               _enterDown   = false;
+    bool               _enterDown    = false;
+
+    WebServer          _server{80};
+    bool               _portalDone   = false;
+    String             _portalSsid;
+    String             _portalPass;
+    AppState*          _state        = nullptr;
 };
