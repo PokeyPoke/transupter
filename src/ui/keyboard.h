@@ -1,0 +1,28 @@
+#pragma once
+#include <Arduino.h>
+
+// Key event types
+enum class KeyEvent { None, Down, Up, Held };
+
+struct KeyState {
+    char     ch;          // lowercase character, or 0 for special keys
+    bool     isEnter;
+    bool     isDel;
+    bool     isEsc;       // mapped from Fn key
+    bool     isUp;        // Fn+W emulation
+    bool     isDown;      // Fn+S emulation
+    KeyEvent event;
+};
+
+class Keyboard {
+public:
+    // Call once per loop() iteration AFTER M5Cardputer.update()
+    KeyState poll();
+
+    // Returns true while a translation language key (c/v/u/r/m/j/k/e) is held
+    bool isLangKeyHeld(char& outKey) const;
+
+private:
+    mutable char  _prevLangKey = 0;
+    mutable bool  _langHeld    = false;
+};
