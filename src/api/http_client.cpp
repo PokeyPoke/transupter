@@ -1,6 +1,19 @@
 #include "http_client.h"
 #include "../config.h"
 #include <HTTPClient.h>
+#include <lwip/dns.h>
+#include <lwip/ip_addr.h>
+
+// Called before every API connection — overrides router DNS at lwIP level.
+// Router was hijacking api.groq.com etc. to a local 10.x.x.x IP.
+// Must be called AFTER lwIP is fully initialised (i.e. after WiFi connects),
+// not during WiFi setup.
+static void ensureGoogleDNS() {
+    ip_addr_t dns;
+    IP4_ADDR(&dns.u_addr.ip4, 8, 8, 8, 8);
+    dns.type = IPADDR_TYPE_V4;
+    dns_setserver(0, &dns);
+}
 
 static const char* MULTIPART_BOUNDARY = "----ESP32Boundary7MA4YWxk";
 
@@ -48,6 +61,7 @@ HttpResponse HttpClient::postJson(const char* host, const char* path,
                                   const String& jsonBody,
                                   const char* extraHeader,
                                   const char* extraHeaderVal) {
+    ensureGoogleDNS();
     WiFiClientSecure client;
     client.setInsecure();
 
@@ -66,6 +80,7 @@ HttpResponse HttpClient::postJson(const char* host, const char* path,
 HttpResponse HttpClient::postJsonAnthropic(const char* host, const char* path,
                                            const String& apiKey,
                                            const String& jsonBody) {
+    ensureGoogleDNS();
     WiFiClientSecure client;
     client.setInsecure();
 
@@ -85,6 +100,7 @@ HttpResponse HttpClient::postMultipart(const char* host, const char* path,
                                        const String& bearerToken,
                                        const uint8_t* audioData, size_t audioLen,
                                        const char* model, const char* language) {
+    ensureGoogleDNS();
     WiFiClientSecure client;
     client.setInsecure();
 
@@ -156,6 +172,7 @@ HttpResponse HttpClient::postJsonBinary(const char* host, const char* path,
                                         const String& jsonBody,
                                         uint8_t* outBuf, size_t outBufSize,
                                         size_t& outLen) {
+    ensureGoogleDNS();
     WiFiClientSecure client;
     client.setInsecure();
     client.setTimeout(30);
