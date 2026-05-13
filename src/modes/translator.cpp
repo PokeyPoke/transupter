@@ -54,22 +54,28 @@ void TranslatorMode::handleRecording(AppState& state) {
     int16_t* buf = (int16_t*) ps_malloc(MAX_SAMPLES * sizeof(int16_t));
     if (!buf) { drawError("Out of memory"); _step = Step::Idle; drawIdle(); return; }
 
-    size_t captured = 0;
-    int    drawTick = 0;
-    char   langKey  = _activeLangKey;
+    size_t        captured    = 0;
+    char          langKey     = _activeLangKey;
+    unsigned long lastCheckMs = millis();
+
+    drawRecording(langKey);
 
     while (captured < MAX_SAMPLES) {
-        M5Cardputer.update();
-
-        char k = 0;
-        if (!_kb.isLangKeyHeld(k)) break; // key released — stop recording
-
+        // Record one DMA chunk (~15ms of audio)
         size_t toRead = min(CHUNK, MAX_SAMPLES - captured);
         if (M5Cardputer.Mic.record(buf + captured, toRead, Recorder::SAMPLE_RATE)) {
             captured += toRead;
         }
 
-        if (++drawTick >= 8) { drawRecording(langKey); drawTick = 0; }
+        // Check key state every 100ms — don't scan keyboard on every chunk
+        // (over-scanning causes debounce to briefly show key as released)
+        if (millis() - lastCheckMs >= 100) {
+            lastCheckMs = millis();
+            M5Cardputer.update();
+            char k = 0;
+            if (!_kb.isLangKeyHeld(k)) break;
+            drawRecording(langKey);
+        }
     }
 
     if (captured == 0) {
