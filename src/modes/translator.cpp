@@ -36,7 +36,6 @@ void TranslatorMode::handleIdle(AppState& state) {
     if (held && !_keyWasHeld) {
         _keyWasHeld    = true;
         _activeLangKey = langKey;
-        _rec.startRecord(15);
         _step = Step::Recording;
         drawRecording(langKey);
     } else if (!held) {
@@ -45,40 +44,43 @@ void TranslatorMode::handleIdle(AppState& state) {
 }
 
 void TranslatorMode::handleRecording(AppState& state) {
-    // Tight synchronous recording loop — matches the official M5Cardputer mic example.
-    // record() blocks per-chunk; M5Cardputer.update() lets us check the keyboard.
-    static constexpr size_t CHUNK      = 240;   // one I2S DMA buffer
-    static constexpr size_t MAX_SECS   = 10;
-    static constexpr size_t MAX_SAMPLES = Recorder::SAMPLE_RATE * MAX_SECS;
+    // Fixed 5-second recording — press once to start, no holding required.
+    // This removes all keyboard-detection-during-recording complexity.
+    // A countdown on screen shows how long is left.
+    static constexpr size_t CHUNK      = 240;
+    static constexpr size_t REC_SECS   = 5;
+    static constexpr size_t MAX_SAMPLES = Recorder::SAMPLE_RATE * REC_SECS;
 
     int16_t* buf = (int16_t*) ps_malloc(MAX_SAMPLES * sizeof(int16_t));
     if (!buf) { drawError("Out of memory"); _step = Step::Idle; drawIdle(); return; }
 
     size_t        captured    = 0;
     char          langKey     = _activeLangKey;
-    unsigned long lastDrawMs  = millis();
-
-    drawRecording(langKey);
+    unsigned long startMs     = millis();
+    unsigned long lastDrawMs  = 0;
 
     while (captured < MAX_SAMPLES) {
-        // Keep keyboard scanner alive every chunk — debounce needs regular scans
-        M5Cardputer.Keyboard.updateKeyList();
-
-        // Stop if no key is physically pressed
-        if (!M5Cardputer.Keyboard.isPressed()) break;
-
-        // Record one DMA chunk
         size_t toRead = min(CHUNK, MAX_SAMPLES - captured);
         if (M5Cardputer.Mic.record(buf + captured, toRead, Recorder::SAMPLE_RATE)) {
             captured += toRead;
         } else {
-            delay(5); // mic not ready — brief pause
+            delay(5);
         }
 
-        // Refresh display every 300ms
-        if (millis() - lastDrawMs >= 300) {
+        // Countdown display every 250ms
+        if (millis() - lastDrawMs >= 250) {
             lastDrawMs = millis();
-            drawRecording(langKey);
+            int secsLeft = REC_SECS - (int)((millis() - startMs) / 1000);
+            _disp.clearContent();
+            auto& tft = M5Cardputer.Display;
+            tft.setTextColor(RED, BLACK);
+            tft.setTextSize(2);
+            tft.setCursor(4, Display::CONTENT_Y + 10);
+            tft.printf("[ REC ] %ds", max(0, secsLeft));
+            tft.setTextSize(1);
+            tft.setTextColor(WHITE, BLACK);
+            tft.setCursor(4, Display::CONTENT_Y + 36);
+            tft.printf("Speak now... %d samples", (int)captured);
         }
     }
 
