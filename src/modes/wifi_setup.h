@@ -24,9 +24,10 @@ private:
     WifiMgr&  _wifi;
     NvsStore& _nvs;
 
-    Step               _step      = Step::Scanning;
+    Step               _step        = Step::Scanning;
     std::vector<AccessPoint> _aps;
-    int                _selected  = 0;
+    int                _selected    = 0;
+    int                _scrollOffset = 0;
     String             _password;
-    bool               _enterDown = false;
+    bool               _enterDown   = false;
 };

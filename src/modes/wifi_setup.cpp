@@ -18,10 +18,19 @@ bool WifiSetupMode::tick(AppState& state) {
         break;
 
     case Step::SelectNetwork: {
+        static constexpr int MAX_VISIBLE = 7;
         auto ks = _kb.poll();
         if (ks.isEsc) return true;  // Fn/Opt = skip WiFi setup entirely
-        if (ks.isUp && _selected > 0) { _selected--; drawNetworkList(); }
-        if (ks.isDown && _selected < (int)_aps.size()-1) { _selected++; drawNetworkList(); }
+        if (ks.isUp && _selected > 0) {
+            _selected--;
+            if (_selected < _scrollOffset) _scrollOffset = _selected;
+            drawNetworkList();
+        }
+        if (ks.isDown && _selected < (int)_aps.size() - 1) {
+            _selected++;
+            if (_selected >= _scrollOffset + MAX_VISIBLE) _scrollOffset = _selected - MAX_VISIBLE + 1;
+            drawNetworkList();
+        }
         // Rising-edge Enter detection: trigger once per press
         bool enterNow = M5Cardputer.Keyboard.keysState().enter;
         bool enterPressed = enterNow && !_enterDown;
@@ -93,10 +102,19 @@ void WifiSetupMode::drawNetworkList() {
         return;
     }
 
-    for (int i = 0; i < (int)_aps.size() && i < 5; i++) {
-        tft.setCursor(4, Display::CONTENT_Y + 14 + i * 12);
-        tft.setTextColor(i == _selected ? YELLOW : WHITE, BLACK);
-        tft.printf("%s (%ddBm)", _aps[i].ssid.c_str(), _aps[i].rssi);
+    static constexpr int MAX_VISIBLE = 7;
+    for (int i = 0; i < MAX_VISIBLE && _scrollOffset + i < (int)_aps.size(); i++) {
+        int idx = _scrollOffset + i;
+        tft.setCursor(4, Display::CONTENT_Y + 14 + i * 14);
+        tft.setTextColor(idx == _selected ? YELLOW : WHITE, BLACK);
+        tft.printf("%s (%d)", _aps[idx].ssid.c_str(), _aps[idx].rssi);
+    }
+
+    // Scroll indicator
+    if ((int)_aps.size() > MAX_VISIBLE) {
+        tft.setTextColor(DARKGREY, BLACK);
+        tft.setCursor(220, Display::CONTENT_Y + 14);
+        tft.printf("%d/%d", _selected + 1, (int)_aps.size());
     }
 }
 
