@@ -8,24 +8,24 @@ void Recorder::startRecord(int maxSecs) {
     _captured   = 0;
     _recording  = true;
 
-    auto cfg = M5.Mic.config();
+    auto cfg = M5Cardputer.Mic.config();
     cfg.sample_rate = SAMPLE_RATE;
     cfg.stereo      = false;
-    M5.Mic.config(cfg);
-    M5.Mic.begin();
+    M5Cardputer.Mic.config(cfg);
+    M5Cardputer.Mic.begin();
 }
 
 void Recorder::drainChunk() {
     if (!_recording || !_buf || _captured >= _maxSamples) return;
     size_t toRead = min(DRAIN_CHUNK, _maxSamples - _captured);
-    if (M5.Mic.record(_buf + _captured, toRead, SAMPLE_RATE)) {
+    if (M5Cardputer.Mic.record(_buf + _captured, toRead, SAMPLE_RATE)) {
         _captured += toRead;
     }
 }
 
 void Recorder::stopRecord() {
     if (!_recording) return;
-    M5.Mic.end();
+    M5Cardputer.Mic.end();
     _recording = false;
 }
 
