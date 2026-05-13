@@ -4,6 +4,39 @@
 
 static const char* MULTIPART_BOUNDARY = "----ESP32Boundary7MA4YWxk";
 
+// Read response body with a 10-second inactivity timeout.
+// Handles servers that use chunked encoding or keep connections alive.
+static String readBody(WiFiClientSecure& client) {
+    String body;
+    body.reserve(512);
+    unsigned long lastData = millis();
+    while (millis() - lastData < 10000) {
+        while (client.available()) {
+            body += (char)client.read();
+            lastData = millis();
+        }
+        if (!client.connected()) break;
+        delay(1);
+    }
+    return body;
+}
+
+// Same but reads into a binary buffer instead of a String.
+static size_t readBodyBinary(WiFiClientSecure& client,
+                              uint8_t* buf, size_t maxLen) {
+    size_t len = 0;
+    unsigned long lastData = millis();
+    while (millis() - lastData < 10000 && len < maxLen) {
+        while (client.available() && len < maxLen) {
+            buf[len++] = client.read();
+            lastData = millis();
+        }
+        if (!client.connected()) break;
+        delay(1);
+    }
+    return len;
+}
+
 HttpResponse HttpClient::postJson(const char* host, const char* path,
                                   const String& bearerToken,
                                   const String& jsonBody,
@@ -85,16 +118,16 @@ HttpResponse HttpClient::postMultipart(const char* host, const char* path,
     client.print(part3);
     client.print(ending);
 
-    // Skip HTTP response headers
+    // Read status line and skip headers
     String statusLine = client.readStringUntil('\n');
     int code = 0;
     sscanf(statusLine.c_str(), "HTTP/1.1 %d", &code);
     while (client.connected()) {
         String line = client.readStringUntil('\n');
-        if (line == "\r") break;
+        if (line == "\r" || line == "\r\n" || line.isEmpty()) break;
     }
 
-    String body = client.readString();
+    String body = readBody(client);
     client.stop();
     return { code, body };
 }
@@ -123,13 +156,10 @@ HttpResponse HttpClient::postJsonBinary(const char* host, const char* path,
     sscanf(statusLine.c_str(), "HTTP/1.1 %d", &code);
     while (client.connected()) {
         String line = client.readStringUntil('\n');
-        if (line == "\r") break;
+        if (line == "\r" || line == "\r\n" || line.isEmpty()) break;
     }
 
-    outLen = 0;
-    while (client.available() && outLen < outBufSize) {
-        outBuf[outLen++] = client.read();
-    }
+    outLen = readBodyBinary(client, outBuf, outBufSize);
     client.stop();
     return { code, "" };
 }
