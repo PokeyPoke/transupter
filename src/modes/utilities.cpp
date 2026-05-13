@@ -20,9 +20,12 @@ bool UtilitiesMode::backRequested() {
 void UtilitiesMode::tick(AppState& state) {
     auto ks = _kb.poll();
 
-    // Detect Fn/Opt directly — isChange() may be consumed, so read state directly
+    // Rising-edge Fn/Opt detection — prevents immediate back-fire when entering from Translator
     auto& raw = M5Cardputer.Keyboard.keysState();
-    if (raw.fn || raw.opt) { _backReq = true; return; }
+    bool fnNow = raw.fn || raw.opt;
+    bool fnPressed = fnNow && !_fnDown;
+    _fnDown = fnNow;
+    if (fnPressed) { _backReq = true; return; }
 
     if (_view == View::HistoryLog) {
         auto& entries = _hist.entries();

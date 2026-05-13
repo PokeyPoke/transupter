@@ -26,4 +26,5 @@ private:
     bool      _wifiSetupReq    = false;
     bool      _backReq         = false;
     bool      _enterDown       = false;
+    bool      _fnDown          = false; // rising-edge debounce for Fn/Opt back
 };
