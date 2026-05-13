@@ -1,6 +1,17 @@
 #include "http_client.h"
 #include "../config.h"
 #include <HTTPClient.h>
+#include <WiFi.h>
+#include <lwip/dns.h>
+#include <lwip/ip_addr.h>
+
+// Override DNS to 8.8.8.8 — bypasses router content filtering / DNS hijacking
+static void useDNS(uint8_t a, uint8_t b, uint8_t c, uint8_t d) {
+    ip_addr_t dns;
+    IP4_ADDR(&dns.u_addr.ip4, a, b, c, d);
+    dns.type = IPADDR_TYPE_V4;
+    dns_setserver(0, &dns);
+}
 
 static const char* MULTIPART_BOUNDARY = "----ESP32Boundary7MA4YWxk";
 
@@ -79,6 +90,9 @@ HttpResponse HttpClient::postMultipart(const char* host, const char* path,
                                        const String& bearerToken,
                                        const uint8_t* audioData, size_t audioLen,
                                        const char* model, const char* language) {
+    // Override DNS to 8.8.8.8 — bypasses router content filtering / DNS hijacking
+    useDNS(8, 8, 8, 8);
+
     // DNS pre-check — fail fast with clear error if DNS can't resolve
     IPAddress resolved;
     if (!WiFi.hostByName(host, resolved)) {
