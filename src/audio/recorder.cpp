@@ -5,14 +5,10 @@ void Recorder::startRecord(int maxSecs) {
     _maxSamples = SAMPLE_RATE * maxSecs;
     _buf        = (int16_t*) ps_malloc(_maxSamples * sizeof(int16_t));
     if (!_buf) return;
-    _captured   = 0;
-    _recording  = true;
-
-    auto cfg = M5Cardputer.Mic.config();
-    cfg.sample_rate = SAMPLE_RATE;
-    cfg.stereo      = false;
-    M5Cardputer.Mic.config(cfg);
-    M5Cardputer.Mic.begin();
+    _captured  = 0;
+    _recording = true;
+    // Mic was started in M5Cardputer.begin() — don't reinitialise.
+    // Reinitialising breaks the running DMA stream.
 }
 
 void Recorder::drainChunk() {
@@ -24,15 +20,14 @@ void Recorder::drainChunk() {
 }
 
 void Recorder::stopRecord() {
-    if (!_recording) return;
-    M5Cardputer.Mic.end();
     _recording = false;
+    // Leave Mic running — it needs to stay active between recordings.
+    // Mic.end() is only called by Player before Speaker.begin().
 }
 
 bool Recorder::isRecording() const { return _recording; }
 
 RecordResult Recorder::getResult() {
-    // VAD: pass if we captured anything — Groq handles empty audio gracefully
     return {
         .samples       = _buf,
         .numSamples    = _captured,

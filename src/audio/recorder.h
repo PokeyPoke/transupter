@@ -12,7 +12,7 @@ class Recorder {
 public:
     static constexpr int    SAMPLE_RATE    = 16000;
     static constexpr int    VAD_THRESHOLD  = 50;   // peak amplitude below = silence
-    static constexpr size_t DRAIN_CHUNK    = 512;  // samples per drain call
+    static constexpr size_t DRAIN_CHUNK    = 240;  // matches I2S DMA buffer size
 
     // Allocates PSRAM buffer and starts mic.
     void startRecord(int maxSecs = 15);
