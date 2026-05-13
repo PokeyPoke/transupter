@@ -18,6 +18,7 @@ bool WifiSetupMode::tick(AppState& state) {
 
     case Step::SelectNetwork: {
         auto ks = _kb.poll();
+        if (ks.isEsc) return true;  // Fn/Opt = skip WiFi setup entirely
         if (ks.isUp && _selected > 0) { _selected--; drawNetworkList(); }
         if (ks.isDown && _selected < (int)_aps.size()-1) { _selected++; drawNetworkList(); }
         // Rising-edge Enter detection: trigger once per press
@@ -79,7 +80,7 @@ void WifiSetupMode::drawNetworkList() {
     tft.setTextSize(1);
     tft.setTextColor(CYAN, BLACK);
     tft.setCursor(4, Display::CONTENT_Y + 2);
-    tft.print("Select network (Fn+W/S, Enter):");
+    tft.print(";/. scroll  Enter=select  Fn=skip WiFi");
     for (int i = 0; i < (int)_aps.size() && i < 5; i++) {
         tft.setCursor(4, Display::CONTENT_Y + 14 + i * 12);
         tft.setTextColor(i == _selected ? YELLOW : WHITE, BLACK);

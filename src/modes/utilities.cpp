@@ -20,17 +20,14 @@ void UtilitiesMode::tick(AppState& state) {
         if (ks.isUp   && _histScroll < (int)entries.size() - 1) _histScroll++;
         if (ks.isDown && _histScroll > 0) _histScroll--;
         if (ks.isEsc) { _view = View::Clock; drawCurrentView(state); return; }
-    } else if (_view == View::WiFiSetup) {
-        bool enterNow = M5Cardputer.Keyboard.keysState().enter;
-        bool enterPressed = enterNow && !_enterDown;
-        _enterDown = enterNow;
-        if (enterPressed) { _wifiSetupReq = true; return; }
-        if (ks.isEsc)   { _view = View::Clock; }
-        if (ks.isUp)    _view = (View)(((int)_view - 1 + 5) % 5);
-        if (ks.isDown)  _view = (View)(((int)_view + 1) % 5);
     } else {
+        View prev = _view;
         if (ks.isUp)   _view = (View)(((int)_view - 1 + 5) % 5);
         if (ks.isDown) _view = (View)(((int)_view + 1) % 5);
+        // Auto-trigger WiFi setup the moment user navigates to that view
+        if (_view == View::WiFiSetup && prev != View::WiFiSetup) {
+            _wifiSetupReq = true;
+        }
     }
     drawCurrentView(state);
 }
@@ -111,7 +108,7 @@ void UtilitiesMode::drawCurrentView(const AppState& state) {
         }
         tft.setTextColor(YELLOW, BLACK);
         tft.setCursor(4, Display::CONTENT_Y + 72);
-        tft.print("Enter = scan & reconnect");
+        tft.print("Navigate here to scan");
         break;
     }
     }
