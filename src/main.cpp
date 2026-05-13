@@ -13,6 +13,14 @@
 #include "modes/wifi_setup.h"
 #include "modes/api_key_setup.h"
 #include "modes/utilities.h"
+#include "audio/wav.h"
+#include "audio/recorder.h"
+#include "audio/player.h"
+#include "api/groq.h"
+#include "api/anthropic.h"
+#include "api/openai_tts.h"
+#include "storage/history.h"
+#include "modes/translator.h"
 
 static AppState       state;
 static NvsStore       nvs;
@@ -24,6 +32,8 @@ static Keyboard       kb;
 static WifiSetupMode*  wifiSetup  = nullptr;
 static ApiKeySetupMode* apiSetup  = nullptr;
 static UtilitiesMode*  utilities  = nullptr;
+static History          history;
+static TranslatorMode*  translator = nullptr;
 
 static unsigned long lastStatusMs  = 0;
 static unsigned long lastBatteryMs = 0;
@@ -97,6 +107,7 @@ void setup() {
     disp.begin();
 
     LittleFS.begin(true); // format on first boot if needed
+    history.begin();
 
     disp.showBootScreen("Loading settings...");
     bootNvs();
@@ -120,6 +131,9 @@ void setup() {
     }
 
     utilities = new UtilitiesMode(disp, kb, battery);
+    if (state.apiKeysSet) {
+        translator = new TranslatorMode(disp, kb, history);
+    }
 
     disp.drawStatusBar(state);
 }
@@ -176,15 +190,21 @@ void loop() {
             delete apiSetup;
             apiSetup   = nullptr;
             state.mode = AppMode::Translator;
+            if (!translator) {
+                translator = new TranslatorMode(disp, kb, history);
+            }
             disp.clearContent();
         }
         break;
 
     case AppMode::Translator:
-        // Plan B stub — replaced in Plan B Task 10
-        if (millis() % 5000 < 50) {
-            disp.clearContent();
-            disp.printContent("Hold C/V/U/R/M/J/K/E\nto translate.\n(Plan B)");
+        if (translator) {
+            translator->tick(state);
+        } else {
+            if (millis() % 5000 < 50) {
+                disp.clearContent();
+                disp.printContent("API keys missing.\nFn for Utilities.");
+            }
         }
         {
             auto ks = kb.poll();

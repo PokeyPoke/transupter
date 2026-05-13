@@ -2,6 +2,8 @@
 #include <LittleFS.h>
 #include <ArduinoJson.h>
 
+constexpr char History::PATH[];
+
 void History::begin() {
     load();
 }
