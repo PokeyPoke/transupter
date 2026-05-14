@@ -2,6 +2,7 @@
 #include <WiFi.h>
 #include <LittleFS.h>
 #include <time.h>
+#include <esp_task_wdt.h>
 
 #include "config.h"
 #include "app.h"
@@ -70,6 +71,7 @@ static void bootWifi() {
     wifiMgr.connect(ssid, pass);
 
     unsigned long start = millis();
+    unsigned long lastDrawMs = 0;
     bool skipped = false;
     while (millis() - start < WIFI_SKIP_TIMEOUT_MS) {
         M5Cardputer.update();
@@ -77,12 +79,14 @@ static void bootWifi() {
         if (wifiMgr.isConnected()) break;
         if (M5Cardputer.Keyboard.isPressed()) { skipped = true; break; }
 
-        // Countdown
-        int remaining = (WIFI_SKIP_TIMEOUT_MS - (millis() - start)) / 1000;
-        char buf[48];
-        snprintf(buf, sizeof(buf), "Connecting... (%ds, any key to skip)", remaining);
-        disp.showBootScreen(buf);
-        delay(200);
+        if (millis() - lastDrawMs >= 500) {
+            lastDrawMs = millis();
+            int remaining = (WIFI_SKIP_TIMEOUT_MS - (millis() - start)) / 1000;
+            char buf[48];
+            snprintf(buf, sizeof(buf), "Connecting... (%ds, any key to skip)", remaining);
+            disp.showBootScreen(buf);
+        }
+        yield();
     }
 
     state.wifiConnected = wifiMgr.isConnected();
@@ -97,7 +101,10 @@ static void syncNtp() {
     configTime(0, 0, "pool.ntp.org", "time.google.com");
     struct tm ti;
     unsigned long start = millis();
-    while (!getLocalTime(&ti) && millis() - start < 2000) delay(100);
+    while (!getLocalTime(&ti) && millis() - start < 2000) {
+        yield();
+        delayMicroseconds(500);
+    }
 }
 
 // ──────────────────────────────────────────────────────────────────────
@@ -147,14 +154,21 @@ void setup() {
     }
 
     disp.drawStatusBar(state);
+
+    // Init watchdog AFTER boot so slow WiFi/NTP don't trip it.
+    // 60s gives headroom for a full translation pipeline:
+    // TLS(15s) + audio upload + Groq processing(15s) + response read(15s).
+    esp_task_wdt_init(60, true);
+    esp_task_wdt_add(NULL);
 }
 
 // ──────────────────────────────────────────────────────────────────────
 void loop() {
     M5Cardputer.update();
+    esp_task_wdt_reset();
 
-    // Refresh battery every 30s
-    if (millis() - lastBatteryMs > 30000) {
+    // Refresh battery every 5s
+    if (millis() - lastBatteryMs > 5000) {
         auto bs = battery.read();
         state.batteryPct      = bs.percent;
         state.batteryCharging = bs.charging;
@@ -163,7 +177,7 @@ void loop() {
         if (state.batteryPct <= BATTERY_LOW_POPUP && !state.lowBatteryShown) {
             disp.showPopup("Low Battery", "Charge soon!");
             state.lowBatteryShown = true;
-            delay(1500);
+            // Non-blocking: popup will be visible until next redraw
         }
     }
 
