@@ -5,16 +5,21 @@
 TranscriptResult GroqApi::transcribe(const String& apiKey,
                                      const uint8_t* wavData, size_t wavLen,
                                      const char* langHint) {
-    auto resp = _http.postMultipart(
-        GROQ_HOST, GROQ_STT_PATH,
-        apiKey,
-        wavData, wavLen,
-        GROQ_STT_MODEL,
-        langHint
-    );
+    HttpResponse resp = { 0, "" };
+    for (int attempt = 0; attempt < 3; attempt++) {
+        resp = _http.postMultipart(
+            GROQ_HOST, GROQ_STT_PATH,
+            apiKey, wavData, wavLen,
+            GROQ_STT_MODEL, langHint
+        );
+        if (resp.ok()) break;
+        Serial.printf("[Groq] attempt %d failed code=%d body='%s'\n",
+                      attempt + 1, resp.statusCode, resp.body.substring(0,40).c_str());
+        if (attempt < 2) delay(1500);
+    }
 
     if (!resp.ok()) {
-        return { "", "", false, "Groq HTTP " + String(resp.statusCode) + ": " + resp.body };
+        return { "", "", false, "Groq " + String(resp.statusCode) + ":" + resp.body.substring(0,20) };
     }
 
     JsonDocument doc;

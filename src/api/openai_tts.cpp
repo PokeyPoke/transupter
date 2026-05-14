@@ -29,8 +29,11 @@ TtsResult OpenAiTts::synthesize(const String& apiKey, const String& text) {
     );
 
     if (!resp.ok() || outLen == 0) {
+        Serial.printf("[TTS] HTTP %d outLen=%u\n", resp.statusCode, (unsigned)outLen);
         free(buf);
-        return { nullptr, 0, false, "TTS HTTP " + String(resp.statusCode) };
+        // Include first 20 chars of body so the on-screen error is meaningful
+        String errBody = (resp.body.length() > 0) ? resp.body.substring(0, 20) : "no body";
+        return { nullptr, 0, false, String(resp.statusCode) + " " + errBody };
     }
 
     return { buf, outLen, true, "" };

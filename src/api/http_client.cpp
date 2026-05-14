@@ -1,19 +1,6 @@
 #include "http_client.h"
 #include "../config.h"
 #include <HTTPClient.h>
-#include <lwip/dns.h>
-#include <lwip/ip_addr.h>
-
-// Called before every API connection — overrides router DNS at lwIP level.
-// Router was hijacking api.groq.com etc. to a local 10.x.x.x IP.
-// Must be called AFTER lwIP is fully initialised (i.e. after WiFi connects),
-// not during WiFi setup.
-static void ensureGoogleDNS() {
-    ip_addr_t dns;
-    IP4_ADDR(&dns.u_addr.ip4, 8, 8, 8, 8);
-    dns.type = IPADDR_TYPE_V4;
-    dns_setserver(0, &dns);
-}
 
 static const char* MULTIPART_BOUNDARY = "----ESP32Boundary7MA4YWxk";
 
@@ -61,7 +48,6 @@ HttpResponse HttpClient::postJson(const char* host, const char* path,
                                   const String& jsonBody,
                                   const char* extraHeader,
                                   const char* extraHeaderVal) {
-    ensureGoogleDNS();
     WiFiClientSecure client;
     client.setInsecure();
 
@@ -80,7 +66,6 @@ HttpResponse HttpClient::postJson(const char* host, const char* path,
 HttpResponse HttpClient::postJsonAnthropic(const char* host, const char* path,
                                            const String& apiKey,
                                            const String& jsonBody) {
-    ensureGoogleDNS();
     WiFiClientSecure client;
     client.setInsecure();
 
@@ -100,13 +85,20 @@ HttpResponse HttpClient::postMultipart(const char* host, const char* path,
                                        const String& bearerToken,
                                        const uint8_t* audioData, size_t audioLen,
                                        const char* model, const char* language) {
-    ensureGoogleDNS();
+    Serial.printf("[Groq] heap=%u maxAlloc=%u audio=%u\n",
+                  ESP.getFreeHeap(), ESP.getMaxAllocHeap(), (unsigned)audioLen);
+
     WiFiClientSecure client;
     client.setInsecure();
 
+    Serial.printf("[Groq] connecting %s:443 ...\n", host);
     if (!client.connect(host, 443, 15000)) {
-        return { -1, "TLS connect failed" };
+        char sslErr[64] = {};
+        client.lastError(sslErr, sizeof(sslErr));
+        Serial.printf("[Groq] FAILED ssl=%s\n", sslErr);
+        return { -1, String("TLS:") + sslErr };
     }
+    Serial.printf("[Groq] connected\n");
 
     String part1 = String("--") + MULTIPART_BOUNDARY + "\r\n";
     part1 += "Content-Disposition: form-data; name=\"file\"; filename=\"audio.wav\"\r\n";
@@ -150,13 +142,13 @@ HttpResponse HttpClient::postMultipart(const char* host, const char* path,
     client.print(part2);
     client.print(part3);
     client.print(ending);
-    client.flush(); // ensure all bytes are sent before reading response
+    client.flush();
 
-    // Read status line and headers with inactivity timeout
-    client.setTimeout(15); // 15s per readStringUntil call
+    client.setTimeout(15);
     String statusLine = client.readStringUntil('\n');
     int code = 0;
     sscanf(statusLine.c_str(), "HTTP/1.1 %d", &code);
+    Serial.printf("[Groq] status=%d line='%s'\n", code, statusLine.c_str());
     while (client.connected()) {
         String line = client.readStringUntil('\n');
         if (line == "\r" || line == "\r\n" || line.isEmpty()) break;
@@ -172,12 +164,11 @@ HttpResponse HttpClient::postJsonBinary(const char* host, const char* path,
                                         const String& jsonBody,
                                         uint8_t* outBuf, size_t outBufSize,
                                         size_t& outLen) {
-    ensureGoogleDNS();
     WiFiClientSecure client;
     client.setInsecure();
     client.setTimeout(30);
 
-    if (!client.connect(host, 443, 15000)) return { -1, "connect failed" };
+    if (!client.connect(host, 443, 15000)) return { -1, "TLS connect failed" };
 
     client.printf("POST %s HTTP/1.1\r\n", path);
     client.printf("Host: %s\r\n", host);

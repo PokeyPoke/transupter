@@ -15,10 +15,13 @@ const LangKey* TranslatorMode::findLangKey(char ch) const {
 }
 
 // E key → always English. Pair key: detected EN → pair language, else → English.
+// Whisper returns "en" or the full name "english" depending on version — handle both.
 String TranslatorMode::targetLanguage(const String& detectedLang, const LangKey* lk) const {
     if (strlen(lk->whisperLang) == 0) return "English";   // E key: universal → EN
-    if (detectedLang == "en")         return lk->pairLang; // detected EN → pair language
-    return "English";                                       // detected pair → EN
+    String lang = detectedLang;
+    lang.toLowerCase();
+    if (lang == "en" || lang == "english") return lk->pairLang; // detected EN → pair language
+    return "English";                                            // detected pair → EN
 }
 
 void TranslatorMode::tick(AppState& state) {
@@ -132,34 +135,42 @@ void TranslatorMode::runPipeline(AppState& state, char langKeyChar,
 
     if (!state.wifiConnected) { free(wavData); drawError("No WiFi - go to Utilities"); return; }
 
-    // STT — transcribe audio
+    // STT — transcribe audio; no language hint so Whisper auto-detects the spoken
+    // language. This is required for bidirectional detection: sending a hint causes
+    // Whisper to report the hint language in its response even when the user speaks
+    // English, which breaks the direction logic in targetLanguage().
     drawStatus("Connecting to Groq...");
-    auto stt = _groq.transcribe(state.keyGroq, wavData, wavLen, lk->whisperLang);
+    auto stt = _groq.transcribe(state.keyGroq, wavData, wavLen, "");
 
     // Free WAV buffer NOW — largest allocation (~64 KB), must go before Anthropic TLS
     free(wavData);
     wavData = nullptr;
 
     if (!stt.success) { drawError(stt.error); return; }
+    Serial.printf("[STT] lang='%s' text='%s'\n", stt.detectedLang.c_str(), stt.text.substring(0,40).c_str());
     drawStatus("Got:", stt.text.substring(0, 28).c_str());
 
     // Translation — Anthropic TLS needs ~8 KB (reduced from 32 KB via sdkconfig)
     drawStatus("Translating...", stt.text.substring(0, 28).c_str());
     String tgtLang = targetLanguage(stt.detectedLang, lk);
+    Serial.printf("[TR] detectedLang='%s' target='%s'\n", stt.detectedLang.c_str(), tgtLang.c_str());
     auto tr = _anthropic.translate(state.keyAnthropic, stt.text, tgtLang);
     if (!tr.success) { drawError(tr.error); return; }
 
     drawResult(stt.text, tr.text);
     _hist.append(stt.text, tr.text, String(langKeyChar));
 
-    // TTS — attempt but non-fatal if memory is tight
+    // TTS — attempt but non-fatal; show error briefly so we can diagnose
     drawStatus("Speaking...");
     auto tts = _tts.synthesize(state.keyOpenAI, tr.text);
     if (tts.success) {
         _player.playWav(tts.data, tts.length);
         free(tts.data);
+    } else {
+        Serial.printf("[TTS] failed: %s\n", tts.error.c_str());
+        drawStatus("TTS err:", tts.error.substring(0, 24).c_str());
+        delay(2000);
     }
-    // If TTS fails, result is already on screen — not an error
 
     drawResult(stt.text, tr.text);
 }
