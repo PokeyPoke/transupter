@@ -243,17 +243,20 @@ HttpResponse HttpClient::postMultipart(const char* host, const char* path,
 
     client.print(part1);
 
-    static constexpr size_t WRITE_CHUNK = 1024;
+    // Write audio without yield() between chunks. On ESP32 the WiFi stack runs on
+    // Core 0 independently — yield() is not needed for transmission. Each yield()
+    // was allowing the FreeRTOS scheduler to process incoming RST packets between
+    // write chunks, which caused stalls mid-upload and silent code=0 failures.
+    // Abort immediately if write fails rather than silently continuing.
     size_t written = 0;
     while (written < audioLen) {
-        size_t n = min(WRITE_CHUNK, audioLen - written);
-        size_t w = client.write(audioData + written, n);
+        size_t w = client.write(audioData + written, audioLen - written);
         if (w == 0) {
             Serial.printf("[Groq] write stalled at %u/%u\n", (unsigned)written, (unsigned)audioLen);
-            break;
+            client.stop();
+            return { -1, "Audio:" + String(written) + "/" + String(audioLen) };
         }
         written += w;
-        yield();
     }
     Serial.printf("[Groq] sent %u/%u audio bytes\n", (unsigned)written, (unsigned)audioLen);
 
