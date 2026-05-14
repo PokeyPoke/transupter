@@ -4,8 +4,22 @@
 
 static const char* MULTIPART_BOUNDARY = "----ESP32Boundary7MA4YWxk";
 
-// Read response body in 128-byte blocks — reduces heap fragmentation vs byte-by-byte.
-static String readBody(WiFiClientSecure& client) {
+// Drain HTTP response headers, return true if Transfer-Encoding: chunked.
+static bool drainHeaders(WiFiClientSecure& client) {
+    bool chunked = false;
+    int lines = 0;
+    while (client.connected() && lines < 100) {
+        String line = client.readStringUntil('\n');
+        lines++;
+        if (line.startsWith("Transfer-Encoding:") && line.indexOf("chunked") >= 0)
+            chunked = true;
+        if (line == "\r" || line == "\r\n" || line.isEmpty()) break;
+    }
+    return chunked;
+}
+
+// Read a plain (non-chunked) response body into a String.
+static String readBodyPlain(WiFiClientSecure& client) {
     String body;
     body.reserve(512);
     uint8_t tmp[128];
@@ -14,10 +28,7 @@ static String readBody(WiFiClientSecure& client) {
         int avail = client.available();
         if (avail > 0) {
             int n = client.readBytes(tmp, min(avail, (int)sizeof(tmp)));
-            if (n > 0) {
-                body.concat((const char*)tmp, n);
-                lastData = millis();
-            }
+            if (n > 0) { body.concat((const char*)tmp, n); lastData = millis(); }
         }
         if (!client.connected() && !client.available()) break;
         delay(1);
@@ -25,16 +36,64 @@ static String readBody(WiFiClientSecure& client) {
     return body;
 }
 
-// Same but reads into a binary buffer instead of a String.
+// Decode chunked transfer encoding into a String.
+static String readBodyChunked(WiFiClientSecure& client) {
+    String body;
+    body.reserve(512);
+    while (client.connected() || client.available()) {
+        String sizeLine = client.readStringUntil('\n');
+        sizeLine.trim();
+        if (sizeLine.isEmpty()) continue;
+        long chunkSize = strtol(sizeLine.c_str(), nullptr, 16);
+        if (chunkSize == 0) break;
+        uint8_t tmp[128];
+        long remaining = chunkSize;
+        while (remaining > 0 && (client.connected() || client.available())) {
+            int toRead = min((long)sizeof(tmp), remaining);
+            int n = client.readBytes(tmp, toRead);
+            if (n > 0) { body.concat((const char*)tmp, n); remaining -= n; }
+            else delay(1);
+        }
+        client.readStringUntil('\n'); // consume trailing CRLF after chunk data
+    }
+    return body;
+}
+
+// Decode chunked transfer encoding into a binary buffer.
+static size_t readBodyBinaryChunked(WiFiClientSecure& client,
+                                     uint8_t* buf, size_t maxLen) {
+    size_t len = 0;
+    while (client.connected() || client.available()) {
+        String sizeLine = client.readStringUntil('\n');
+        sizeLine.trim();
+        if (sizeLine.isEmpty()) continue;
+        long chunkSize = strtol(sizeLine.c_str(), nullptr, 16);
+        if (chunkSize == 0) break;
+        long remaining = chunkSize;
+        while (remaining > 0 && len < maxLen && (client.connected() || client.available())) {
+            int toRead = min((long)(maxLen - len), remaining);
+            int n = client.readBytes(buf + len, toRead);
+            if (n > 0) { len += n; remaining -= n; }
+            else delay(1);
+        }
+        client.readStringUntil('\n');
+    }
+    return len;
+}
+
+static String readBody(WiFiClientSecure& client, bool chunked) {
+    return chunked ? readBodyChunked(client) : readBodyPlain(client);
+}
+
 static size_t readBodyBinary(WiFiClientSecure& client,
-                              uint8_t* buf, size_t maxLen) {
+                              uint8_t* buf, size_t maxLen, bool chunked) {
+    if (chunked) return readBodyBinaryChunked(client, buf, maxLen);
     size_t len = 0;
     unsigned long lastData = millis();
     while (millis() - lastData < 10000 && len < maxLen) {
         int avail = client.available();
         if (avail > 0) {
-            int n = client.readBytes(buf + len,
-                                     min(avail, (int)(maxLen - len)));
+            int n = client.readBytes(buf + len, min(avail, (int)(maxLen - len)));
             if (n > 0) { len += n; lastData = millis(); }
         }
         if (!client.connected() && !client.available()) break;
@@ -148,13 +207,10 @@ HttpResponse HttpClient::postMultipart(const char* host, const char* path,
     String statusLine = client.readStringUntil('\n');
     int code = 0;
     sscanf(statusLine.c_str(), "HTTP/1.1 %d", &code);
-    Serial.printf("[Groq] status=%d line='%s'\n", code, statusLine.c_str());
-    while (client.connected()) {
-        String line = client.readStringUntil('\n');
-        if (line == "\r" || line == "\r\n" || line.isEmpty()) break;
-    }
+    Serial.printf("[Groq] status=%d\n", code);
+    bool chunked = drainHeaders(client);
 
-    String body = readBody(client);
+    String body = readBody(client, chunked);
     client.stop();
     return { code, body };
 }
@@ -181,12 +237,9 @@ HttpResponse HttpClient::postJsonBinary(const char* host, const char* path,
     String statusLine = client.readStringUntil('\n');
     int code = 0;
     sscanf(statusLine.c_str(), "HTTP/1.1 %d", &code);
-    while (client.connected()) {
-        String line = client.readStringUntil('\n');
-        if (line == "\r" || line == "\r\n" || line.isEmpty()) break;
-    }
+    bool chunked = drainHeaders(client);
 
-    outLen = readBodyBinary(client, outBuf, outBufSize);
+    outLen = readBodyBinary(client, outBuf, outBufSize, chunked);
     client.stop();
     return { code, "" };
 }

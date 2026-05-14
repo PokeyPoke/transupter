@@ -51,27 +51,33 @@ void TranslatorMode::handleIdle(AppState& state) {
 }
 
 void TranslatorMode::handleRecording(AppState& state) {
-    static constexpr size_t CHUNK      = 240;
-    static constexpr size_t REC_SECS   = 5;
-    static constexpr size_t MAX_SAMPLES = Recorder::SAMPLE_RATE * REC_SECS;
+    static constexpr size_t CHUNK    = 240;
+    static constexpr size_t REC_SECS = 5;
 
-    // Prefer PSRAM; fall back to DRAM with shorter buffer if unavailable
-    size_t   maxSamples = MAX_SAMPLES;
-    int16_t* buf        = (int16_t*) ps_malloc(MAX_SAMPLES * sizeof(int16_t));
-    if (!buf) {
+    // Single allocation: reserve WAV header space + audio samples in one block.
+    // This avoids the previous peak of buf(64KB) + wav(64KB) = 128KB simultaneous,
+    // which fragmented the heap and caused TLS connection failures.
+    size_t maxSamples = Recorder::SAMPLE_RATE * REC_SECS;
+    size_t maxWavLen  = sizeof(WavHeader) + maxSamples * sizeof(int16_t);
+
+    uint8_t* wav = (uint8_t*) ps_malloc(maxWavLen);
+    if (!wav) {
         maxSamples = Recorder::SAMPLE_RATE * 2; // 2s from DRAM
-        buf        = (int16_t*) malloc(maxSamples * sizeof(int16_t));
+        maxWavLen  = sizeof(WavHeader) + maxSamples * sizeof(int16_t);
+        wav        = (uint8_t*) malloc(maxWavLen);
     }
-    if (!buf) { drawError("Out of memory"); _step = Step::Idle; drawIdle(); return; }
+    if (!wav) { drawError("Out of memory"); _step = Step::Idle; drawIdle(); return; }
 
-    size_t        captured    = 0;
-    char          langKey     = _activeLangKey;
-    unsigned long startMs     = millis();
-    unsigned long lastDrawMs  = 0;
+    // Record samples directly after the header space
+    int16_t*      samples    = (int16_t*)(wav + sizeof(WavHeader));
+    size_t        captured   = 0;
+    char          langKey    = _activeLangKey;
+    unsigned long startMs    = millis();
+    unsigned long lastDrawMs = 0;
 
     while (captured < maxSamples) {
         size_t toRead = min(CHUNK, maxSamples - captured);
-        if (M5Cardputer.Mic.record(buf + captured, toRead, Recorder::SAMPLE_RATE)) {
+        if (M5Cardputer.Mic.record(samples + captured, toRead, Recorder::SAMPLE_RATE)) {
             captured += toRead;
         } else {
             delay(5);
@@ -95,7 +101,7 @@ void TranslatorMode::handleRecording(AppState& state) {
     }
 
     if (captured == 0) {
-        free(buf);
+        free(wav);
         drawError("Nothing recorded");
         delay(1500);
         _step = Step::Idle;
@@ -103,23 +109,10 @@ void TranslatorMode::handleRecording(AppState& state) {
         return;
     }
 
-    WavHeader header  = buildWavHeader(Recorder::SAMPLE_RATE, captured);
-    size_t    wavLen  = sizeof(WavHeader) + captured * sizeof(int16_t);
-    uint8_t*  wav     = (uint8_t*) ps_malloc(wavLen);
-    if (!wav) wav     = (uint8_t*) malloc(wavLen);
-
-    if (!wav) {
-        free(buf);
-        drawError("Out of memory");
-        delay(1500);
-        _step = Step::Idle;
-        drawIdle();
-        return;
-    }
-
+    // Write WAV header into the reserved space at the front of the buffer
+    WavHeader header = buildWavHeader(Recorder::SAMPLE_RATE, captured);
     memcpy(wav, &header, sizeof(WavHeader));
-    memcpy(wav + sizeof(WavHeader), buf, captured * sizeof(int16_t));
-    free(buf);
+    size_t wavLen = sizeof(WavHeader) + captured * sizeof(int16_t);
 
     runPipeline(state, langKey, wav, wavLen); // takes ownership, frees wav after STT
 

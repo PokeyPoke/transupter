@@ -245,7 +245,14 @@ String WifiSetupMode::buildPortalHtml() const {
         "<select name='ssid'>";
 
     for (auto& ap : _aps) {
-        html += "<option value='" + ap.ssid + "'>" + ap.ssid
+        // HTML-encode the SSID to prevent XSS from malicious AP names
+        String safe = ap.ssid;
+        safe.replace("&", "&amp;");
+        safe.replace("<", "&lt;");
+        safe.replace(">", "&gt;");
+        safe.replace("\"", "&quot;");
+        safe.replace("'", "&#39;");
+        html += "<option value='" + safe + "'>" + safe
               + " (" + String(ap.rssi) + " dBm)</option>";
     }
 
