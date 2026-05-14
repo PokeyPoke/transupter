@@ -183,11 +183,11 @@ void loop() {
 
     // Refresh status bar every second
     if (millis() - lastStatusMs > 1000) {
-        if (state.wifiConnected) {
-            wifiMgr.tick();
-            state.wifiConnected = wifiMgr.isConnected();
-            state.wifiRssi      = wifiMgr.rssi();
-        }
+        wifiMgr.tick();
+        // Tie to actual radio state — wifiMgr._status can stay Connected even after
+        // WiFi.disconnect() is called (e.g., by the network scan in WifiSetupMode).
+        state.wifiConnected = wifiMgr.isConnected() && (WiFi.status() == WL_CONNECTED);
+        state.wifiRssi      = wifiMgr.rssi();
         disp.drawStatusBar(state);
         lastStatusMs = millis();
     }

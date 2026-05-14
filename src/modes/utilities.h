@@ -14,7 +14,7 @@ public:
     bool backRequested();      // true once when user presses Fn/Opt to exit
 
 private:
-    enum class View { Clock, BatteryStats, SystemInfo, HistoryLog, WiFiSetup, APITest };
+    enum class View { Clock, BatteryStats, SystemInfo, HistoryLog, APITest, WiFiSetup };
     static constexpr int VIEW_COUNT = 6;
     void drawCurrentView(const AppState& state);
     void runGroqTest(AppState& state);

@@ -37,9 +37,16 @@ void UtilitiesMode::tick(AppState& state) {
         View prev = _view;
         if (ks.isUp)   _view = (View)(((int)_view - 1 + VIEW_COUNT) % VIEW_COUNT);
         if (ks.isDown) _view = (View)(((int)_view + 1) % VIEW_COUNT);
-        // Auto-trigger WiFi setup the moment user navigates to that view
-        if (_view == View::WiFiSetup && prev != View::WiFiSetup) {
-            _wifiSetupReq = true;
+        // WiFiSetup: only enter the mode (which disconnects WiFi to scan) when the user
+        // explicitly presses Enter. Auto-triggering on scroll was disconnecting WiFi
+        // every time the user navigated through this view to reach other views.
+        if (_view == View::WiFiSetup) {
+            bool enterNow = M5Cardputer.Keyboard.keysState().enter;
+            bool enterPressed = enterNow && !_enterDown;
+            _enterDown = enterNow;
+            if (enterPressed) _wifiSetupReq = true;
+        } else {
+            _enterDown = false;
         }
         // Auto-run Groq test when navigating to APITest view
         if (_view == View::APITest && prev != View::APITest) {
@@ -125,7 +132,7 @@ void UtilitiesMode::drawCurrentView(const AppState& state) {
         }
         tft.setTextColor(YELLOW, BLACK);
         tft.setCursor(4, Display::CONTENT_Y + 72);
-        tft.print("Navigate here to scan");
+        tft.print("Enter=reconfigure WiFi");
         break;
     }
     case View::APITest: {
