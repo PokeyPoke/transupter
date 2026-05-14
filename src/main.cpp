@@ -156,9 +156,9 @@ void setup() {
     disp.drawStatusBar(state);
 
     // Init watchdog AFTER boot so slow WiFi/NTP don't trip it.
-    // 60s gives headroom for a full translation pipeline:
-    // TLS(15s) + audio upload + Groq processing(15s) + response read(15s).
-    esp_task_wdt_init(60, true);
+    // 300s: 3 retries × (15s TLS + upload + 15s read) = ~105s worst case,
+    // plus headroom. Only fires on true infinite hangs.
+    esp_task_wdt_init(300, true);
     esp_task_wdt_add(NULL);
 }
 

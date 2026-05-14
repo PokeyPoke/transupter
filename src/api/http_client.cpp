@@ -1,6 +1,7 @@
 #include "http_client.h"
 #include "../config.h"
 #include <HTTPClient.h>
+#include <WiFi.h>
 
 static const char* MULTIPART_BOUNDARY = "----ESP32Boundary7MA4YWxk";
 
@@ -163,6 +164,18 @@ HttpResponse HttpClient::postMultipart(const char* host, const char* path,
                                        const char* model, const char* language) {
     Serial.printf("[Groq] heap=%u maxAlloc=%u audio=%u\n",
                   ESP.getFreeHeap(), ESP.getMaxAllocHeap(), (unsigned)audioLen);
+
+    // Send a DNS probe using the carrier's own DNS before opening the TLS socket.
+    // This exercises the WiFi transmit path and refreshes the iPhone hotspot's NAT
+    // table entry for this device, preventing TCP RST on the first data packet.
+    // Uses the carrier's DNS (not a hardcoded 8.8.8.8) so it works on any network.
+    {
+        IPAddress probe;
+        bool ok = WiFi.hostByName(host, probe);
+        Serial.printf("[Groq] DNS probe %s -> %s\n",
+                      host, ok ? probe.toString().c_str() : "failed");
+        // Failure is non-fatal — we still attempt the TLS connect below.
+    }
 
     WiFiClientSecure client;
     client.setInsecure();
