@@ -179,7 +179,6 @@ HttpResponse HttpClient::postMultipart(const char* host, const char* path,
 
     WiFiClientSecure client;
     client.setInsecure();
-    client.setTimeout(HTTP_READ_TIMEOUT_S);
 
     Serial.printf("[Groq] connecting %s:443 ...\n", host);
     if (!client.connect(host, 443, 15000)) {
@@ -189,6 +188,11 @@ HttpResponse HttpClient::postMultipart(const char* host, const char* path,
         client.stop();
         return { -1, String("TLS:") + sslErr };
     }
+    // Set read timeout AFTER connect so SO_RCVTIMEO is applied to the live socket.
+    client.setTimeout(HTTP_READ_TIMEOUT_S);
+    // Brief settle: let the network stack drain any post-handshake frames
+    // before we start writing. Prevents CONN_RESET on the first send.
+    delay(50);
     Serial.printf("[Groq] connected, heap=%u\n", ESP.getFreeHeap());
 
     String part1 = String("--") + MULTIPART_BOUNDARY + "\r\n";

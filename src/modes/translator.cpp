@@ -128,32 +128,43 @@ void TranslatorMode::runPipeline(AppState& state, char langKeyChar,
 
     if (!state.wifiConnected) { free(wavData); drawError("No WiFi - go to Utilities"); return; }
 
-    // STT — transcribe audio; no language hint so Whisper auto-detects the spoken
-    // language. This is required for bidirectional detection: sending a hint causes
-    // Whisper to report the hint language in its response even when the user speaks
-    // English, which breaks the direction logic in targetLanguage().
+    // Stop mic before network calls — I2S DMA and WiFi DMA can conflict on ESP32-S3.
+    // IMPORTANT: every return path below must call Mic.begin() to restore mic state.
+    M5Cardputer.Mic.end();
+
+    // STT
     drawStatus("Connecting to Groq...");
     auto stt = _groq.transcribe(state.keyGroq, wavData, wavLen, "");
 
-    // Free WAV buffer NOW — largest allocation (~64 KB), must go before Anthropic TLS
+    // Free WAV buffer immediately — largest allocation (~64 KB), must go before Anthropic TLS
     free(wavData);
     wavData = nullptr;
 
-    if (!stt.success) { drawError(stt.error); return; }
-    Serial.printf("[STT] lang='%s' text='%s'\n", stt.detectedLang.c_str(), stt.text.substring(0,40).c_str());
+    if (!stt.success) {
+        drawError(stt.error);
+        M5Cardputer.Mic.begin();
+        return;
+    }
+    Serial.printf("[STT] lang='%s' text='%s'\n",
+                  stt.detectedLang.c_str(), stt.text.substring(0,40).c_str());
     drawStatus("Got:", stt.text.substring(0, 28).c_str());
 
-    // Translation — Anthropic TLS needs ~8 KB (reduced from 32 KB via sdkconfig)
+    // Translation
     drawStatus("Translating...", stt.text.substring(0, 28).c_str());
     String tgtLang = targetLanguage(stt.detectedLang, lk);
-    Serial.printf("[TR] detectedLang='%s' target='%s'\n", stt.detectedLang.c_str(), tgtLang.c_str());
+    Serial.printf("[TR] detectedLang='%s' target='%s'\n",
+                  stt.detectedLang.c_str(), tgtLang.c_str());
     auto tr = _anthropic.translate(state.keyAnthropic, stt.text, tgtLang);
-    if (!tr.success) { drawError(tr.error); return; }
+    if (!tr.success) {
+        drawError(tr.error);
+        M5Cardputer.Mic.begin();
+        return;
+    }
 
     drawResult(stt.text, tr.text);
     _hist.append(stt.text, tr.text, String(langKeyChar));
 
-    // TTS — attempt but non-fatal; show error briefly so we can diagnose
+    // TTS — non-fatal; show error briefly so we can diagnose
     drawStatus("Speaking...");
     auto tts = _tts.synthesize(state.keyOpenAI, tr.text);
     if (tts.success) {
@@ -166,6 +177,7 @@ void TranslatorMode::runPipeline(AppState& state, char langKeyChar,
     }
 
     drawResult(stt.text, tr.text);
+    M5Cardputer.Mic.begin();
 }
 
 void TranslatorMode::drawIdle() {
