@@ -14,8 +14,10 @@ public:
     bool backRequested();      // true once when user presses Fn/Opt to exit
 
 private:
-    enum class View { Clock, BatteryStats, SystemInfo, HistoryLog, WiFiSetup };
+    enum class View { Clock, BatteryStats, SystemInfo, HistoryLog, WiFiSetup, APITest };
+    static constexpr int VIEW_COUNT = 6;
     void drawCurrentView(const AppState& state);
+    void runGroqTest(AppState& state);
 
     Display&  _disp;
     Keyboard& _kb;
@@ -26,5 +28,6 @@ private:
     bool      _wifiSetupReq    = false;
     bool      _backReq         = false;
     bool      _enterDown       = false;
-    bool      _fnDown          = false; // rising-edge debounce for Fn/Opt back
+    bool      _fnDown          = false;
+    String    _testResult      = "Navigate here to test";
 };

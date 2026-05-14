@@ -2,6 +2,7 @@
 #include "../config.h"
 #include <M5Cardputer.h>
 #include <WiFi.h>
+#include <WiFiClientSecure.h>
 #include <time.h>
 
 UtilitiesMode::UtilitiesMode(Display& disp, Keyboard& kb, Battery& bat, History& hist)
@@ -34,11 +35,15 @@ void UtilitiesMode::tick(AppState& state) {
         if (ks.isEsc) { _view = View::Clock; drawCurrentView(state); return; }
     } else {
         View prev = _view;
-        if (ks.isUp)   _view = (View)(((int)_view - 1 + 5) % 5);
-        if (ks.isDown) _view = (View)(((int)_view + 1) % 5);
+        if (ks.isUp)   _view = (View)(((int)_view - 1 + VIEW_COUNT) % VIEW_COUNT);
+        if (ks.isDown) _view = (View)(((int)_view + 1) % VIEW_COUNT);
         // Auto-trigger WiFi setup the moment user navigates to that view
         if (_view == View::WiFiSetup && prev != View::WiFiSetup) {
             _wifiSetupReq = true;
+        }
+        // Auto-run Groq test when navigating to APITest view
+        if (_view == View::APITest && prev != View::APITest) {
+            runGroqTest(state);
         }
     }
     drawCurrentView(state);
@@ -123,9 +128,58 @@ void UtilitiesMode::drawCurrentView(const AppState& state) {
         tft.print("Navigate here to scan");
         break;
     }
+    case View::APITest: {
+        tft.setTextColor(CYAN, BLACK);
+        tft.setCursor(4, Display::CONTENT_Y + 8);
+        tft.print("Groq API Test");
+        tft.setTextColor(WHITE, BLACK);
+        tft.setCursor(4, Display::CONTENT_Y + 28);
+        tft.print(_testResult.substring(0, 34));
+        tft.setTextColor(YELLOW, BLACK);
+        tft.setCursor(4, Display::CONTENT_Y + 72);
+        tft.print("Navigate here to re-run");
+        break;
+    }
     }
 
     tft.setTextColor(DARKGREY, BLACK);
     tft.setCursor(4, Display::CONTENT_Y + 96);
     tft.print(";/. = switch view  Fn=back");
+}
+
+void UtilitiesMode::runGroqTest(AppState& state) {
+    _testResult = "Connecting...";
+    drawCurrentView(state);
+
+    if (!state.wifiConnected) { _testResult = "No WiFi"; return; }
+    if (state.keyGroq.isEmpty()) { _testResult = "No Groq key set"; return; }
+
+    WiFiClientSecure client;
+    client.setInsecure();
+
+    if (!client.connect("api.groq.com", 443, 10000)) {
+        _testResult = "TLS connect failed";
+        return;
+    }
+    client.setTimeout(10);
+
+    // Minimal GET to /openai/v1/models — tests key validity and connection
+    client.printf("GET /openai/v1/models HTTP/1.1\r\n");
+    client.printf("Host: api.groq.com\r\n");
+    client.printf("Authorization: Bearer %s\r\n", state.keyGroq.c_str());
+    client.print("User-Agent: transupter/1.0\r\n");
+    client.print("Connection: close\r\n\r\n");
+    client.flush();
+
+    String statusLine = client.readStringUntil('\n');
+    int code = 0;
+    sscanf(statusLine.c_str(), "HTTP/1.1 %d", &code);
+    client.stop();
+
+    if      (code == 200) _testResult = "OK (200) key valid";
+    else if (code == 401) _testResult = "401 Bad API key";
+    else if (code == 403) _testResult = "403 Forbidden";
+    else if (code == 429) _testResult = "429 Rate limited";
+    else if (code == 0)   _testResult = "CONN_RESET (TLS ok)";
+    else                  _testResult = "HTTP " + String(code);
 }

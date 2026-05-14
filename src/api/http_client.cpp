@@ -129,6 +129,7 @@ HttpResponse HttpClient::postJson(const char* host, const char* path,
     http.begin(client, String("https://") + host + path);
     http.addHeader("Content-Type", "application/json");
     http.addHeader("Authorization", "Bearer " + bearerToken);
+    http.addHeader("User-Agent", "transupter/1.0");
     if (extraHeader) http.addHeader(extraHeader, extraHeaderVal);
 
     int code = http.POST(jsonBody);
@@ -150,6 +151,7 @@ HttpResponse HttpClient::postJsonAnthropic(const char* host, const char* path,
     http.addHeader("Content-Type",      "application/json");
     http.addHeader("x-api-key",         apiKey);
     http.addHeader("anthropic-version", ANTHROPIC_VER);
+    http.addHeader("User-Agent",        "transupter/1.0");
 
     int code = http.POST(jsonBody);
     String body = http.getString();
@@ -192,6 +194,16 @@ HttpResponse HttpClient::postMultipart(const char* host, const char* path,
     client.setTimeout(HTTP_READ_TIMEOUT_S);
     Serial.printf("[Groq] connected, heap=%u\n", ESP.getFreeHeap());
 
+    // If the server sends data before we write anything, it's closing immediately
+    // (TLS close_notify, alert, or proxy error). Log it and fail fast.
+    if (client.available()) {
+        uint8_t peek[64] = {};
+        int n = client.readBytes(peek, min(client.available(), (int)sizeof(peek) - 1));
+        Serial.printf("[Groq] server pre-sent %d bytes: %s\n", n, (char*)peek);
+        client.stop();
+        return { -1, String("SrvPreSend:") + (char*)peek };
+    }
+
     String part1 = String("--") + MULTIPART_BOUNDARY + "\r\n";
     part1 += "Content-Disposition: form-data; name=\"file\"; filename=\"audio.wav\"\r\n";
     part1 += "Content-Type: audio/wav\r\n\r\n";
@@ -220,6 +232,7 @@ HttpResponse HttpClient::postMultipart(const char* host, const char* path,
     int sent = client.printf("POST %s HTTP/1.1\r\n", path);
     sent    += client.printf("Host: %s\r\n", host);
     sent    += client.printf("Authorization: Bearer %s\r\n", bearerToken.c_str());
+    sent    += client.print("User-Agent: transupter/1.0\r\n");
     sent    += client.printf("Content-Type: multipart/form-data; boundary=%s\r\n", MULTIPART_BOUNDARY);
     sent    += client.printf("Content-Length: %u\r\n", (unsigned)contentLen);
     sent    += client.print("Connection: close\r\n\r\n");
@@ -277,6 +290,7 @@ HttpResponse HttpClient::postJsonBinary(const char* host, const char* path,
     client.printf("POST %s HTTP/1.1\r\n", path);
     client.printf("Host: %s\r\n", host);
     client.printf("Authorization: Bearer %s\r\n", bearerToken.c_str());
+    client.print("User-Agent: transupter/1.0\r\n");
     client.print("Content-Type: application/json\r\n");
     client.printf("Content-Length: %u\r\n", (unsigned)jsonBody.length());
     client.print("Connection: close\r\n\r\n");

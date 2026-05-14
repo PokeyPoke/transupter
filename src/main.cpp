@@ -45,9 +45,9 @@ static unsigned long lastBatteryMs = 0;
 
 static void bootNvs() {
     nvs.begin();
-    state.keyGroq       = nvs.getString(NVS_KEY_GROQ,       "");
-    state.keyAnthropic  = nvs.getString(NVS_KEY_ANTHROPIC,  "");
-    state.keyOpenAI     = nvs.getString(NVS_KEY_OPENAI,     "");
+    state.keyGroq       = nvs.getString(NVS_KEY_GROQ,       ""); state.keyGroq.trim();
+    state.keyAnthropic  = nvs.getString(NVS_KEY_ANTHROPIC,  ""); state.keyAnthropic.trim();
+    state.keyOpenAI     = nvs.getString(NVS_KEY_OPENAI,     ""); state.keyOpenAI.trim();
     state.apiKeysSet    = !state.keyGroq.isEmpty() &&
                           !state.keyAnthropic.isEmpty() &&
                           !state.keyOpenAI.isEmpty();

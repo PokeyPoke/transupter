@@ -118,9 +118,9 @@ void ApiKeySetupMode::handleRoot() {
 }
 
 void ApiKeySetupMode::handleSave() {
-    String groq      = _server.arg("groq");
-    String anthropic = _server.arg("anthropic");
-    String openai    = _server.arg("openai");
+    String groq      = _server.arg("groq");      groq.trim();
+    String anthropic = _server.arg("anthropic"); anthropic.trim();
+    String openai    = _server.arg("openai");    openai.trim();
 
     if (groq.isEmpty() || anthropic.isEmpty() || openai.isEmpty()) {
         _server.send(400, "text/html", ERROR_HTML);
