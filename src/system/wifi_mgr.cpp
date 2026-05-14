@@ -13,6 +13,7 @@ void WifiMgr::tick() {
     if (_status != WifiStatus::Connecting) return;
 
     if (WiFi.status() == WL_CONNECTED) {
+        WiFi.setSleep(false); // keep radio always active — prevents CONN_RESET on TLS
         _status = WifiStatus::Connected;
         return;
     }
